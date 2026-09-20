@@ -1412,7 +1412,7 @@ function pinForm(){
     '<div class="warn">There is no way to recover a forgotten PIN. A backup file is downloaded before the lock is switched on — keep it somewhere safe.</div>'},
   function(d){
     var p1=(d.p1||'').trim(),p2=(d.p2||'').trim();
-    if(!/^d{6,}$/.test(p1)){toast('Use 6 digits or more');return false}
+    if(!/^[0-9]{6,}$/.test(p1)){toast('Use 6 digits or more');return false}
     if(p1!==p2){toast('The two PINs do not match');return false}
     exportData();                                   /* never lock records that have no backup */
     var salt=crypto.getRandomValues(new Uint8Array(16));
