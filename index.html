@@ -192,6 +192,29 @@ input[type=checkbox]{width:auto;min-height:0;accent-color:var(--palm)}
 .lockbox p{color:var(--soft);font-size:.9rem;margin:0 0 1.1rem}
 .lockbox input{width:100%;text-align:center;letter-spacing:.4em;font-size:1.4rem;padding:.7rem;border:2px solid var(--edge);border-radius:12px;background:var(--field);color:var(--ink)}
 .lockmsg{min-height:1.3rem;margin:.6rem 0;font-weight:700;font-size:.9rem;color:var(--tomato)}
+.calcfab{position:fixed;z-index:45;width:52px;height:52px;border-radius:50%;border:2px solid var(--edge);
+  background:var(--tomato);color:#fff;font-size:1.3rem;font-weight:900;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 6px 18px rgba(0,0,0,.35);cursor:grab;touch-action:none;user-select:none}
+.calcfab.drag{cursor:grabbing;transform:scale(1.08)}
+.calcpanel{position:fixed;z-index:46;width:15rem;background:var(--panel);border:2px solid var(--edge);border-radius:16px;
+  padding:.6rem;box-shadow:0 12px 34px rgba(0,0,0,.45);touch-action:none}
+.calcpanel[hidden]{display:none}
+.calcbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem;cursor:grab}
+.calcbar b{font-size:.8rem;color:var(--soft);letter-spacing:.04em;text-transform:uppercase}
+.calcout{background:var(--field);border:2px solid var(--edge);border-radius:10px;padding:.45rem .6rem;text-align:right;
+  font-variant-numeric:tabular-nums;font-size:1.35rem;font-weight:800;overflow:hidden;white-space:nowrap;min-height:1.9rem}
+.calcexp{text-align:right;font-size:.75rem;color:var(--soft);min-height:1rem;overflow:hidden;white-space:nowrap}
+.calcpad{display:grid;grid-template-columns:repeat(4,1fr);gap:.3rem;margin-top:.4rem}
+.calcpad button{padding:.55rem 0;border-radius:10px;border:2px solid var(--edge);background:var(--field);color:var(--ink);
+  font-size:1rem;font-weight:800;cursor:pointer}
+.calcpad button.op{background:var(--panel2,var(--field));color:var(--sun)}
+.calcpad button.eq{background:var(--tomato);color:#fff}
+.calcpad button:active{transform:translateY(1px)}
+.hl{list-style:none;margin:.2rem 0 0;padding:0}
+.hl li{position:relative;padding-left:1.4rem;margin:.35rem 0;font-size:.92rem;line-height:1.4}
+.hl li:before{position:absolute;left:0;font-weight:900}
+.hl li.v:before{content:'\2713';color:var(--leaf)}
+.hl li.x:before{content:'!';color:var(--tomato)}
 .li.voided .t,.li.voided .s{text-decoration:line-through;opacity:.55}
 .scantorch{position:absolute;right:.5rem;bottom:.5rem;z-index:2;min-height:36px;padding:.3rem .7rem;border:2px solid var(--edge);border-radius:10px;background:var(--panel);color:var(--ink);font-weight:700;font-size:.85rem;cursor:pointer}
 .scantorch[aria-pressed="true"]{background:var(--sun);color:var(--on-sun)}
@@ -237,6 +260,21 @@ input[type=checkbox]{width:auto;min-height:0;accent-color:var(--palm)}
 
 /* ---------- helpers ---------- */
 var KEY='tindahan.sarisari.v1', DAY=864e5;
+/* A phone with a wrong clock files sales on the wrong day. Whenever we are online we
+   take the server's Date header and keep the offset, so every timestamp is real time.
+   ponytail: one probe per launch is enough — phone clocks drift by seconds, not hours. */
+var clockOff=0;
+function now(){return Date.now()+clockOff}
+function syncClock(){
+  if(!navigator.onLine)return;
+  fetch(location.href,{method:'HEAD',cache:'no-store'}).then(function(r){
+    var d=r.headers.get('date');if(!d)return;
+    var t=Date.parse(d);if(!isFinite(t))return;
+    var off=t-Date.now();
+    if(Math.abs(off)>30000){clockOff=off;toast('Clock corrected by '+Math.round(off/60000)+' min')}
+  }).catch(function(){});
+}
+window.addEventListener('online',syncClock);
 function $(s,r){return (r||document).querySelector(s)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4)}
@@ -245,7 +283,7 @@ function r2(n){return Math.round((+n||0)*100)/100}
 function fmt(n){n=r2(n);var a=Math.abs(n);var s=a.toLocaleString('en-PH',{minimumFractionDigits:(a%1?2:0),maximumFractionDigits:2});return (n<0?'−':'')+'₱'+s}
 function sgn(n){n=r2(n);return n===0?fmt(0):(n>0?'+':'−')+fmt(Math.abs(n))}
 function startOfDay(ts){var d=new Date(ts);d.setHours(0,0,0,0);return d.getTime()}
-function fdate(ts){var d=new Date(ts),t0=startOfDay(Date.now());var tm=d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'});if(ts>=t0)return 'Today '+tm;if(ts>=t0-DAY)return 'Yesterday '+tm;return d.toLocaleDateString('en-PH',{month:'short',day:'numeric'})+' '+tm}
+function fdate(ts){var d=new Date(ts),t0=startOfDay(now());var tm=d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'});if(ts>=t0)return 'Today '+tm;if(ts>=t0-DAY)return 'Yesterday '+tm;return d.toLocaleDateString('en-PH',{month:'short',day:'numeric'})+' '+tm}
 function plural(n,w){return n+' '+w+(n===1?'':'s')}
 
 var ICON={
@@ -269,6 +307,9 @@ var ICON={
 function ic(n,s,w){s=s||20;return '<svg xmlns="http://www.w3.org/2000/svg" width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="'+(w||2)+'" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+ICON[n]+'</svg>'}
 
 /* ---------- state (saved in this browser) ---------- */
+/* ponytail: two businesses is what exists. A third means turning this into a list in S. */
+var BIZ=[['store','Sari-sari store'],['billiard','Billiard hall']];
+function bizName(id){var b=BIZ.find(function(x){return x[0]===id});return b?b[1]:'Sari-sari store'}
 var CATS=['Groceries','Drinks','Snacks','Personal care','Household','Other'];
 var EXP_CATS=['Electricity','Water','Rent','Transport','Packaging & supplies','Repairs','Wages','Other'];
 function fresh(){return {v:1,store:{name:'My Sari-sari Store',feePer500:10,openingCash:0},wallets:[{id:'gcash',name:'GCash',opening:0},{id:'maribank',name:'MariBank',opening:0}],items:[],suki:[],tx:[],setup:false,lastBackup:0}}
@@ -283,22 +324,55 @@ function parseState(raw){
   return o;
 }
 var crypt=null,locked=false;
-function load(){
-  var raw=null;
-  try{raw=localStorage.getItem(KEY)}catch(e){memOnly=true;return fresh()}
-  if(!raw)return fresh();
-  if(raw.indexOf('"enc"')>=0){try{if(JSON.parse(raw).enc){locked=true;return fresh()}}catch(e){}}
-  try{var st=parseState(raw);if(st)return st}catch(e){}
-  try{localStorage.setItem(KEY+'.broken',raw)}catch(e){}   /* keep the unreadable copy instead of erasing it */
-  return fresh();
+/* localStorage caps out around 5 MB — a few years of entries. IndexedDB has no practical
+   limit, so it is the real store; localStorage is kept as a mirror purely so an older
+   copy of the app, or a browser that blocks IndexedDB, still finds the records.
+   ponytail: one key, one value, whole-state writes. Per-row storage only matters if a
+   single save ever gets slow, which at a sari-sari store's volume it will not. */
+var store={raw:null,idb:null};
+function idb(){
+  if(store.idb)return store.idb;
+  return store.idb=new Promise(function(res,rej){
+    if(!window.indexedDB)return rej(0);
+    var r=indexedDB.open('tindahan',1);
+    r.onupgradeneeded=function(){r.result.createObjectStore('kv')};
+    r.onsuccess=function(){res(r.result)};
+    r.onerror=function(){rej(r.error)};
+  });
 }
+function idbDo(mode,fn){
+  return idb().then(function(db){return new Promise(function(res,rej){
+    var tx=db.transaction('kv',mode),rq=fn(tx.objectStore('kv'));
+    rq.onsuccess=function(){res(rq.result)};
+    rq.onerror=function(){rej(rq.error)};
+  })});
+}
+function readStore(){
+  return idbDo('readonly',function(o){return o.get('state')}).then(function(v){
+    if(v)return v;
+    var ls=null;try{ls=localStorage.getItem(KEY)}catch(e){}
+    if(ls)return idbDo('readwrite',function(o){return o.put(ls,'state')}).then(function(){return ls},function(){return ls});
+    return null;
+  },function(){
+    try{return localStorage.getItem(KEY)}catch(e){memOnly=true;return null}
+  });
+}
+function writeStore(str){
+  store.raw=str;
+  try{localStorage.setItem(KEY,str)}catch(e){}        /* mirror only — a full quota here is fine */
+  return idbDo('readwrite',function(o){return o.put(str,'state')}).then(function(){
+    if(memOnly){memOnly=false;render()}
+  },function(){
+    if(!memOnly){memOnly=true;toast('Could not save — back up now.')}
+  });
+}
+function load(){return fresh()}                        /* the real read happens in boot(), asynchronously */
 var S=load();
 var stamp=0;   /* bumped on every save; calc() caches against it */
 function save(){
   stamp++;
   if(crypt){saveEnc();return}
-  try{localStorage.setItem(KEY,JSON.stringify(S))}
-  catch(e){if(!memOnly){memOnly=true;toast('Out of room — this is NOT being saved. Back up now.')}}
+  writeStore(JSON.stringify(S));
 }
 var ui={view:'home',sellQ:'',stockQ:'',stockF:'all',period:'today',ledgerN:30};
 var cart={lines:[],pay:'cash',sid:'',wid:'',given:'',note:''};
@@ -323,17 +397,18 @@ function calcRaw(){
   S.suki.forEach(function(s){debt[s.id]=0;chunks[s.id]=[]});
   var txs=S.tx.filter(function(t){return !t.void}).sort(function(a,b){return a.ts-b.ts});
   txs.forEach(function(t){
-    cash+=t.cash||0;
-    if(t.wid&&(t.wid in wal))wal[t.wid]+=t.wal||0;
+    cash=r2(cash+(t.cash||0));
+    if(t.wid&&(t.wid in wal))wal[t.wid]=r2(wal[t.wid]+(t.wal||0));
     if(t.sid&&(t.sid in debt)){
-      var d=t.debt||0;debt[t.sid]+=d;var ch=chunks[t.sid];
+      var d=t.debt||0;debt[t.sid]=r2(debt[t.sid]+d);var ch=chunks[t.sid];
       if(d>0)ch.push({ts:t.ts,a:d});
       else if(d<0){d=-d;while(d>0.0001&&ch.length){var x=ch[0];if(x.a<=d+0.0001){d-=x.a;ch.shift()}else{x.a-=d;d=0}}}
     }
     (t.stk||[]).forEach(function(x){if(x.iid in stock)stock[x.iid]+=x.q});
   });
   var age={};
-  Object.keys(chunks).forEach(function(id){age[id]=(chunks[id].length&&debt[id]>0.005)?Math.floor((Date.now()-chunks[id][0].ts)/DAY):0});
+  Object.keys(chunks).forEach(function(id){age[id]=(chunks[id].length&&debt[id]>0.005)?Math.floor((now()-chunks[id][0].ts)/DAY):0});
+  Object.keys(stock).forEach(function(k){stock[k]=r2(stock[k])});
   return {cash:r2(cash),wal:wal,debt:debt,stock:stock,age:age};
 }
 function cashCat(t){
@@ -350,19 +425,32 @@ function cashCat(t){
   }
 }
 function summ(from,to){
-  var r={rev:0,cogs:0,fee:0,exp:0,n:0,cashIn:0,cashOut:0,inBy:{},outBy:{}};
+  var r={rev:0,cogs:0,fee:0,exp:0,n:0,cashIn:0,cashOut:0,inBy:{},outBy:{},biz:{}};
+  BIZ.forEach(function(b){r.biz[b[0]]={rev:0,cogs:0,fee:0,exp:0,n:0}});
   S.tx.forEach(function(t){
     if(t.void||t.ts<from||t.ts>=to)return;
-    if(t.type==='sale'){r.rev+=t.rev||0;r.cogs+=t.cogs||0;r.n++}
-    r.fee+=t.fee||0;r.exp+=t.exp||0;
+    if(t.type==='sale'){
+      r.rev=r2(r.rev+(t.rev||0));r.cogs=r2(r.cogs+(t.cogs||0));r.n++;
+      var seen={};
+      (t.lines||[]).forEach(function(l){
+        var bk=l.biz||'store',b=r.biz[bk]||r.biz.store;
+        b.rev=r2(b.rev+l.qty*l.price);b.cogs=r2(b.cogs+l.qty*l.cost);
+        if(!seen[bk]){seen[bk]=1;b.n++}
+      });
+    }
+    r.fee=r2(r.fee+(t.fee||0));r.exp=r2(r.exp+(t.exp||0));
+    var tb=r.biz[t.biz]||r.biz.store;
+    tb.fee=r2(tb.fee+(t.fee||0));tb.exp=r2(tb.exp+(t.exp||0));
     var c=t.cash||0;
-    if(c>0){r.cashIn+=c;var k=cashCat(t);r.inBy[k]=(r.inBy[k]||0)+c}
-    else if(c<0){r.cashOut-=c;var k2=cashCat(t);r.outBy[k2]=(r.outBy[k2]||0)-c}
+    if(c>0){r.cashIn=r2(r.cashIn+c);var k=cashCat(t);r.inBy[k]=r2((r.inBy[k]||0)+c)}
+    else if(c<0){r.cashOut=r2(r.cashOut-c);var k2=cashCat(t);r.outBy[k2]=r2((r.outBy[k2]||0)-c)}
   });
-  r.gross=r.rev-r.cogs;r.earn=r.gross+r.fee;r.net=r.earn-r.exp;return r;
+  r.gross=r2(r.rev-r.cogs);r.earn=r2(r.gross+r.fee);r.net=r2(r.earn-r.exp);
+  BIZ.forEach(function(x){var b=r.biz[x[0]];b.gross=r2(b.rev-b.cogs);b.net=r2(b.gross+b.fee-b.exp)});
+  return r;
 }
 function periodRange(p){
-  var t0=startOfDay(Date.now()),d=new Date();
+  var t0=startOfDay(now()),d=new Date();
   if(p==='today')return {from:t0,to:t0+DAY,label:'Today'};
   if(p==='7d')return {from:t0-6*DAY,to:t0+DAY,label:'Last 7 days'};
   if(p==='30d')return {from:t0-29*DAY,to:t0+DAY,label:'Last 30 days'};
@@ -466,7 +554,7 @@ function go(v){ui.view=v;render();window.scrollTo(0,0)}
 
 /* Home */
 function viewHome(c){
-  var now=Date.now(),t0=startOfDay(now),td=summ(t0,t0+DAY);
+  var nw=now(),t0=startOfDay(nw),td=summ(t0,t0+DAY);
   var debtors=S.suki.filter(function(s){return c.debt[s.id]>0.005}).sort(function(a,b){return c.debt[b.id]-c.debt[a.id]});
   var owed=debtors.reduce(function(a,s){return a+c.debt[s.id]},0);
   var overdue=debtors.filter(function(s){return c.age[s.id]>=14});
@@ -476,7 +564,8 @@ function viewHome(c){
   var low=S.items.filter(function(i){return !i.svc&&i.reorder>0&&c.stock[i.id]<=i.reorder}).sort(function(a,b){return (c.stock[a.id]/a.reorder)-(c.stock[b.id]/b.reorder)});
   var recent=S.tx.slice().sort(function(a,b){return b.ts-a.ts}).slice(0,5);
   var h='<div class="pagehead"><p>'+new Date().toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric'})+'</p><h1>'+hello+'</h1></div><div class="stack">';
-  if(S.tx.length&&Date.now()-(S.lastBackup||0)>7*DAY)h+='<div class="card bg-tomato"><div class="cardhead"><h2>Back up your records</h2></div><p style="margin:0 0 .7rem">'+(S.lastBackup?'Last backup was '+plural(Math.floor((Date.now()-S.lastBackup)/DAY),'day')+' ago.':'You have never backed up.')+' Everything here lives only on this device — if it is lost or wiped, so are your records.</p><button class="btn btn-red" data-act="export">Back up now</button></div>';
+  if(S.tx.length&&now()-(S.lastBackup||0)>2*DAY)h+='<div class="card bg-tomato"><div class="cardhead"><h2>Back up your records</h2></div><p style="margin:0 0 .7rem">'+(S.lastBackup?'Last backup was '+plural(Math.floor((now()-S.lastBackup)/DAY),'day')+' ago.':'You have never backed up.')+' Everything here lives only on this device — if it is lost or wiped, so are your records.</p><button class="btn btn-red" data-act="export">Back up now</button></div>';
+  h+=healthCard(c);
   if(!S.setup)h+='<div class="card bg-sea"><div class="cardhead"><h2>Set up your store</h2></div><p style="margin:0 0 .7rem">Enter your starting drawer cash and e-wallet balances so every total is correct from day one, then add your items in Stock.</p><div class="rowbtns"><button class="btn btn-blue" data-act="settings">Enter starting balances</button><button class="btn" data-act="help">How to use it</button><button class="btn btn-ghost" data-act="dismisssetup">Later</button></div></div>';
   h+='<div class="card hero"><div class="kicker">Cash in drawer</div><div class="bigval" style="font-size:2.8rem;margin-top:.3rem">'+fmt(c.cash)+'</div><div style="font-size:.85rem;margin-top:.4rem;opacity:.85">What the cash box should hold right now, based on your records.</div></div>';
   h+='<div class="grid2"><div class="card"><div class="kicker">Sales today</div><div class="bigval" style="font-size:1.7rem;margin-top:.2rem">'+fmt(td.rev)+'</div><div class="soft" style="font-size:.8rem">'+plural(td.n,'sale')+'</div></div>'+
@@ -574,7 +663,7 @@ function sukiName(id){return sname(id)}
 
 /* E-Wallet */
 function viewWallet(c){
-  var t0=startOfDay(Date.now()),td=S.tx.filter(function(t){return t.type==='ew'&&t.ts>=t0});
+  var t0=startOfDay(now()),td=S.tx.filter(function(t){return t.type==='ew'&&t.ts>=t0});
   var fee=td.reduce(function(a,t){return a+(t.fee||0)},0),vol=td.reduce(function(a,t){return a+(t.amount||0)},0);
   var hist=S.tx.filter(function(t){return t.wid}).sort(function(a,b){return b.ts-a.ts}).slice(0,40);
   return head('E-Wallet','Cash-in, cash-out and load business for GCash, MariBank and others.')+'<div class="stack">'+
@@ -585,12 +674,56 @@ function viewWallet(c){
    '<div class="card"><div class="cardhead"><h2>Wallet activity</h2></div>'+(hist.length?'<div class="list">'+hist.map(function(t){return txRow(t)}).join('')+'</div>':empty('No wallet activity','Record a cash-in, cash-out or load to get started.'))+'</div></div>';
 }
 
+/* A plain-language read on the business: this week against last week, plus the things
+   that actually sink a sari-sari store — utang you cannot collect, and empty shelves.
+   ponytail: thresholds are guesses tuned for a small shop. They all live in this one function. */
+function health(c){
+  var t0=startOfDay(now()),wk=summ(t0-6*DAY,t0+DAY),prev=summ(t0-13*DAY,t0-6*DAY);
+  var owed=S.suki.reduce(function(a,s){return a+Math.max(0,c.debt[s.id]||0)},0);
+  var overdue=S.suki.filter(function(s){return c.age[s.id]>=14&&c.debt[s.id]>0.005})
+                    .reduce(function(a,s){return a+c.debt[s.id]},0);
+  var out=S.items.filter(function(i){return !i.svc&&c.stock[i.id]<=0}).length;
+  var sellable=S.items.filter(function(i){return !i.svc}).length;
+  var good=[],bad=[];
+  if(wk.net>0)good.push('You made '+fmt(wk.net)+' profit in the last 7 days.');
+  else if(wk.n)bad.push('The last 7 days lost '+fmt(-wk.net)+'.');
+  if(prev.n){
+    var ch=wk.rev-prev.rev,pc=prev.rev>0?Math.round(ch/prev.rev*100):0;
+    if(pc>=10)good.push('Sales are up '+pc+'% from the week before.');
+    else if(pc<=-10)bad.push('Sales are down '+Math.abs(pc)+'% from the week before.');
+  }
+  if(wk.rev>0){
+    var m=Math.round(wk.gross/wk.rev*100);
+    if(m<12)bad.push('You keep only '+m+' centavos of every peso sold — prices may be too near cost.');
+    else if(m>=20)good.push('You keep '+m+' centavos of every peso sold.');
+  }
+  if(owed>0&&wk.rev>0&&owed>wk.rev)bad.push('Utang out ('+fmt(owed)+') is more than a whole week of sales.');
+  if(overdue>0)bad.push(fmt(overdue)+' of utang is over 14 days old.');
+  if(sellable&&out/sellable>=0.2)bad.push(out+' of '+sellable+' items are out of stock — customers are leaving empty-handed.');
+  else if(out)bad.push(plural(out,'item')+' out of stock.');
+  if(c.cash<0)bad.push('The drawer is recorded as negative — something was entered wrong.');
+  var st=!bad.length?['g','Doing well']
+        :(wk.net<0&&wk.n)?['r','Needs attention']
+        :bad.length>=3?['r','Needs attention']:['s','Keep an eye on it'];
+  return {cls:st[0],label:st[1],good:good,bad:bad,wk:wk};
+}
+function healthCard(c){
+  if(!S.tx.length)return '';
+  var h=health(c);
+  var bg=h.cls==='g'?'bg-leaf':h.cls==='r'?'bg-tomato':'bg-sun';
+  var lines=h.bad.map(function(t){return '<li class="x">'+esc(t)+'</li>'})
+           .concat(h.good.map(function(t){return '<li class="v">'+esc(t)+'</li>'})).slice(0,4);
+  return '<div class="card '+bg+'"><div class="cardhead"><h2>How the business is doing</h2>'+tag(h.label,h.cls)+'</div>'+
+    '<ul class="hl">'+lines.join('')+'</ul>'+
+    '<div class="hint" style="margin:.4rem 0 0">Last 7 days, compared with the 7 before.</div></div>';
+}
+
 /* Money */
 function viewMoney(c){
   var pr=periodRange(ui.period),r=summ(pr.from,pr.to);
   var inK=Object.keys(r.inBy).sort(function(a,b){return r.inBy[b]-r.inBy[a]}),outK=Object.keys(r.outBy).sort(function(a,b){return r.outBy[b]-r.outBy[a]});
   var ledger=S.tx.filter(function(t){return t.ts>=pr.from&&t.ts<pr.to}).sort(function(a,b){return b.ts-a.ts});
-  var days=(pr.to-pr.from)/DAY>1?dayBuckets(pr.from,Math.min(pr.to,startOfDay(Date.now())+DAY)):null;
+  var days=(pr.to-pr.from)/DAY>1?dayBuckets(pr.from,Math.min(pr.to,startOfDay(now())+DAY)):null;
   return head('Money','Cash flow, profit and your full ledger.')+'<div class="stack">'+
    '<div class="card hero"><div class="kicker">Cash in drawer</div><div class="bigval" style="font-size:2.4rem;margin:.3rem 0 .7rem">'+fmt(c.cash)+'</div><div class="rowbtns" style="margin:0"><button class="btn btn-sm" data-act="count">Count cash</button><button class="btn btn-sm" data-act="expense">Add expense</button><button class="btn btn-sm" data-act="owner">Owner in / out</button></div></div>'+
    '<div class="chips" role="group" aria-label="Period" style="margin:0">'+[['today','Today'],['7d','7 days'],['30d','30 days'],['month','This month']].map(function(p){return '<button class="chip" data-act="period" data-id="'+p[0]+'" aria-pressed="'+(ui.period===p[0])+'">'+p[1]+'</button>'}).join('')+'</div>'+
@@ -598,6 +731,17 @@ function viewMoney(c){
     '<div class="kv"><span>Sales ('+plural(r.n,'sale')+')</span><b class="num">'+fmt(r.rev)+'</b></div><div class="kv sub"><span>− Cost of goods sold</span><span class="num">'+fmt(r.cogs)+'</span></div>'+
     '<div class="kv"><span>Gross profit</span><b class="num">'+fmt(r.gross)+'</b></div><div class="kv"><span>+ E-wallet fees</span><b class="num">'+fmt(r.fee)+'</b></div><div class="kv"><span>− Expenses &amp; losses</span><b class="num">'+fmt(r.exp)+'</b></div>'+
     '<div class="kv total"><span>Net profit</span><span class="num '+(r.net<0?'red':'green')+'">'+fmt(r.net)+'</span></div><div class="hint" style="margin:.5rem 0 0">Sales on utang count when sold, even if not collected yet.</div></div>'+
+   (BIZ.filter(function(b){var x=r.biz[b[0]];return x.rev||x.exp}).length>1
+     ? '<div class="card"><div class="cardhead"><h2>By business — '+esc(pr.label)+'</h2></div>'+
+       BIZ.map(function(b){var x=r.biz[b[0]];
+         return '<div class="kv"><b>'+esc(b[1])+'</b><b class="num '+(x.net<0?'red':'green')+'">'+fmt(x.net)+'</b></div>'+
+           '<div class="kv sub"><span>Sales ('+plural(x.n,'sale')+')</span><span class="num">'+fmt(x.rev)+'</span></div>'+
+           '<div class="kv sub"><span>− Cost of goods</span><span class="num">'+fmt(x.cogs)+'</span></div>'+
+           (x.fee?'<div class="kv sub"><span>+ Fees</span><span class="num">'+fmt(x.fee)+'</span></div>':'')+
+           '<div class="kv sub"><span>− Expenses</span><span class="num">'+fmt(x.exp)+'</span></div>';
+       }).join('<div style="height:.5rem"></div>')+
+       '<div class="hint" style="margin:.5rem 0 0">An item belongs to a business in Stock → Edit. Expenses are charged when you record them.</div></div>'
+     : '')+
    '<div class="card"><div class="cardhead"><h2>Cash flow — '+esc(pr.label)+'</h2></div>'+
     (days?chart(days,[{k:'cin',c:'cb',l:'Cash in'},{k:'cout',c:'cc',l:'Cash out'}],'Cash in and cash out per day')+'<div style="height:.6rem"></div>':'')+
     '<div class="kv"><b>Cash in</b><b class="num green">'+fmt(r.cashIn)+'</b></div>'+(inK.map(function(k){return '<div class="kv sub"><span>'+esc(k)+'</span><span class="num">'+fmt(r.inBy[k])+'</span></div>'}).join('')||'<div class="kv sub"><span>Nothing yet</span></div>')+
@@ -617,7 +761,8 @@ function drawModal(focusFirst){
   var lab=typeof modal.label==='function'?modal.label():(modal.label||'Save');
   el.innerHTML='<div class="overlay" data-act="ovl"><div class="sheet" role="dialog" aria-modal="true" aria-label="'+esc(modal.title)+'"><div class="shead"><h2>'+esc(modal.title)+'</h2><button type="button" class="btn btn-ghost btn-sm" data-act="closem" aria-label="Close">'+ic('x',20)+'</button></div><form id="mform" novalidate>'+modal.body()+
     (modal.submit?'<div class="mfoot"><button type="button" class="btn" data-act="closem">Cancel</button><button id="msub" class="btn '+(modal.cls||'btn-green')+'" type="submit">'+esc(lab)+'</button></div>':'')+'</form></div></div>';
-  document.body.classList.add('lock');renderCartBar();
+  document.body.classList.add('lock');
+  var cf=$('#calcfab'),cp=$('#calcpanel');if(cf)cf.hidden=true;if(cp){cp.hidden=true;calc9.open=false}renderCartBar();
   if(focusFirst&&modal.focus!==false)setTimeout(function(){var f=$('#mform input:not([type=hidden]):not([type=checkbox]),#mform select');if(f)f.focus()},40);
 }
 function form(title,body,submit,o){openModal(Object.assign({title:title,body:typeof body==='function'?body:function(){return body},submit:submit,label:'Save'},o||{}))}
@@ -631,6 +776,7 @@ function itemForm(id,draft){
     '<div class="field"><label for="f_code">Barcode (optional)</label><div style="display:flex;gap:.5rem"><input id="f_code" name="code" type="text" inputmode="numeric" value="'+esc(v.code||'')+'" placeholder="Scan or type" autocomplete="off" style="flex:1"><button type="button" class="btn" data-act="scanitem" data-id="'+(id||'')+'">'+ic('scan',18)+'Scan</button></div><div class="hint">Scan it once and this item rings itself up at the counter.</div></div>'+
     '<div class="two">'+field('Category','cat',v.cat,{list:'cats'})+field('Sold per','unit',v.unit,{ph:'pc, kg, sachet'})+'</div>'+
     '<div class="two">'+field('Cost price (₱)','cost',v.cost,{num:1})+field('Selling price (₱)','price',v.price,{num:1})+'</div>'+
+    sel('Which business?','biz',BIZ,v.biz||'store')+
     '<label class="check"><input type="checkbox" name="svc" value="1"'+(v.svc?' checked':'')+'> This is a service, not a product (no stock to count)</label>'+
     '<div class="two">'+(it?'':field('Stock on hand now','start',v.start,{num:1}))+field('Reorder when stock ≤','reorder',v.reorder,{num:1})+'</div>'+
     '<div class="hint">Tick the box for things like a billiard game, a haircut or a photocopy — it sells and earns like any item, but nothing is deducted from a shelf.</div>'+
@@ -641,7 +787,7 @@ function itemForm(id,draft){
     if(num(d.price)<=0){toast('Enter a selling price');return false}
     var code=(d.code||'').trim(),clash=code?itemByCode(code):null;
     if(clash&&(!it||clash.id!==it.id)){toast('That barcode is already on '+clash.name);return false}
-    var o={name:name,cat:(d.cat||'Other').trim(),unit:(d.unit||'pc').trim(),cost:num(d.cost),price:num(d.price),reorder:num(d.reorder),code:code,svc:!!d.svc};
+    var o={name:name,cat:(d.cat||'Other').trim(),unit:(d.unit||'pc').trim(),cost:num(d.cost),price:num(d.price),reorder:num(d.reorder),code:code,svc:!!d.svc,biz:d.biz||'store'};
     if(it)Object.assign(it,o);else S.items.push(Object.assign({id:uid(),start:num(d.start)},o));
     save();toast(it?'Item updated':'Item added');
   });
@@ -650,11 +796,11 @@ function restockForm(id){
   var it=item(id);if(!it)return;
   form('Restock — '+it.name,function(){return '<div class="two">'+field('Quantity bought','qty','',{num:1})+field('Cost each (₱)','cost',it.cost||'',{num:1})+'</div>'+
     '<div id="rtotal" class="hint">Total: ₱0</div>'+
-    sel('Paid from','from',[['cash','Cash drawer']].concat(walletOpts().map(function(w){return ['w:'+w[0],w[1]]})).concat([['none','Not from my records (own pocket / on credit)']]),'cash')+
+    sel('Which business?','biz',BIZ,'store')+sel('Paid from','from',[['cash','Cash drawer']].concat(walletOpts().map(function(w){return ['w:'+w[0],w[1]]})).concat([['none','Not from my records (own pocket / on credit)']]),'cash')+
     '<label class="check"><input type="checkbox" name="upd" value="1" checked> Update this item\'s cost price</label>'+field('Note (optional)','note','')},
   function(d){
     var q=num(d.qty),cost=num(d.cost);if(q<=0){toast('Enter the quantity bought');return false}
-    var total=r2(q*cost),t={id:uid(),ts:Date.now(),type:'restock',lines:[{iid:id,name:it.name,qty:q,cost:cost}],stk:[{iid:id,q:q}],purch:total,note:(d.note||'').trim()};
+    var total=r2(q*cost),t={id:uid(),ts:now(),type:'restock',lines:[{iid:id,name:it.name,qty:q,cost:cost}],stk:[{iid:id,q:q}],purch:total,note:(d.note||'').trim()};
     if(d.from==='cash')t.cash=-total;else if(d.from&&d.from.indexOf('w:')===0){t.wid=d.from.slice(2);t.wal=-total}
     if(d.upd&&cost>0)it.cost=cost;
     S.tx.push(t);save();toast('Restocked '+it.name);
@@ -668,7 +814,7 @@ function adjustForm(id){
     '<div class="hint">Removed stock is counted as a loss at cost price, except for count corrections.</div>'},
   function(d){
     var q=num(d.q);if(!q){toast('Enter how many to add or remove');return false}
-    var t={id:uid(),ts:Date.now(),type:'stock_adj',lines:[{iid:id,name:it.name,qty:q,cost:it.cost}],stk:[{iid:id,q:q}],note:d.reason};
+    var t={id:uid(),ts:now(),type:'stock_adj',lines:[{iid:id,name:it.name,qty:q,cost:it.cost}],stk:[{iid:id,q:q}],note:d.reason};
     if(q<0&&d.reason!=='Count correction'){t.exp=r2(-q*it.cost);t.cat='Stock loss'}
     S.tx.push(t);save();toast('Stock adjusted');
   });
@@ -680,7 +826,7 @@ function sukiForm(id,then){
   function(d){
     var name=(d.name||'').trim();if(!name){toast('Enter a name');return false}
     var o={name:name,phone:(d.phone||'').trim(),limit:num(d.limit),note:(d.note||'').trim()};
-    if(id)Object.assign(s,o);else{var n=Object.assign({id:uid()},o);S.suki.push(n);newId=n.id;if(num(d.open)>0)S.tx.push({id:uid(),ts:Date.now(),type:'debt_open',sid:n.id,debt:num(d.open),note:'Existing balance'})}
+    if(id)Object.assign(s,o);else{var n=Object.assign({id:uid()},o);S.suki.push(n);newId=n.id;if(num(d.open)>0)S.tx.push({id:uid(),ts:now(),type:'debt_open',sid:n.id,debt:num(d.open),note:'Existing balance'})}
     save();toast(id?'Suki updated':'Suki added');
   },{after:function(){if(then)then(newId);else if(id||newId)openSuki(id||newId)}});
 }
@@ -691,7 +837,7 @@ function collectForm(id){
   function(d){
     var a=num(d.amt);if(a<=0){toast('Enter an amount');return false}
     if(a>b+0.005){toast('That is more than they owe ('+fmt(b)+')');return false}
-    var t={id:uid(),ts:Date.now(),type:'payment',sid:id,debt:-a,note:(d.note||'').trim()};
+    var t={id:uid(),ts:now(),type:'payment',sid:id,debt:-a,note:(d.note||'').trim()};
     if(d.via==='cash')t.cash=a;else if(d.via==='writeoff'){t.via='writeoff';t.exp=a;t.cat='Bad debt'}else{t.wid=d.via.slice(2);t.wal=a}
     S.tx.push(t);save();toast(d.via==='writeoff'?'Written off':'Payment recorded');
   },{after:function(){openSuki(id)}});
@@ -699,21 +845,21 @@ function collectForm(id){
 function lendForm(id){
   form('Lend cash — '+sname(id),function(){return '<p class="hint" style="margin-top:0">Cash leaves your drawer and is added to their utang.</p>'+field('Amount (₱)','amt','',{num:1})+field('Note (optional)','note','')},
   function(d){var a=num(d.amt);if(a<=0){toast('Enter an amount');return false}
-    S.tx.push({id:uid(),ts:Date.now(),type:'cash_loan',sid:id,cash:-a,debt:a,note:(d.note||'').trim()});save();toast('Cash loan recorded')},
+    S.tx.push({id:uid(),ts:now(),type:'cash_loan',sid:id,cash:-a,debt:a,note:(d.note||'').trim()});save();toast('Cash loan recorded')},
   {after:function(){openSuki(id)}});
 }
 function expenseForm(){
   form('Add expense',function(){return field('Amount (₱)','amt','',{num:1})+sel('Category','cat',EXP_CATS.map(function(c){return [c,c]}),'Electricity')+
     sel('Paid from','from',[['cash','Cash drawer']].concat(walletOpts().map(function(w){return ['w:'+w[0],w[1]]})),'cash')+field('Note (optional)','note','')},
   function(d){var a=num(d.amt);if(a<=0){toast('Enter an amount');return false}
-    var t={id:uid(),ts:Date.now(),type:'expense',cat:d.cat,exp:a,note:(d.note||'').trim()};
+    var t={id:uid(),ts:now(),type:'expense',cat:d.cat,exp:a,note:(d.note||'').trim()};
     if(d.from==='cash')t.cash=-a;else{t.wid=d.from.slice(2);t.wal=-a}
-    S.tx.push(t);save();toast('Expense recorded')});
+    t.biz=d.biz||'store';S.tx.push(t);save();toast('Expense recorded')});
 }
 function ownerForm(){
   form('Owner cash in / out',function(){return sel('What happened?','dir',[['in','I put my own money in'],['out','I took money out (personal use)']],'in')+field('Amount (₱)','amt','',{num:1})+field('Note (optional)','note','')+'<div class="hint">This moves cash but does not count as profit or an expense.</div>'},
   function(d){var a=num(d.amt);if(a<=0){toast('Enter an amount');return false}
-    S.tx.push({id:uid(),ts:Date.now(),type:'owner',cash:d.dir==='in'?a:-a,note:(d.note||'').trim()});save();toast('Recorded')});
+    S.tx.push({id:uid(),ts:now(),type:'owner',cash:d.dir==='in'?a:-a,note:(d.note||'').trim()});save();toast('Recorded')});
 }
 function countForm(){
   var exp=calc().cash;
@@ -721,7 +867,7 @@ function countForm(){
   function(d){
     if(d.cnt===''||d.cnt==null){toast('Enter the counted amount');return false}
     var diff=r2(num(d.cnt)-exp);if(Math.abs(diff)<0.005){toast('Perfect — it matches!');return true}
-    S.tx.push({id:uid(),ts:Date.now(),type:'adjust_cash',cash:diff,note:diff<0?'Short':'Over'});save();toast('Adjusted by '+sgn(diff));
+    S.tx.push({id:uid(),ts:now(),type:'adjust_cash',cash:diff,note:diff<0?'Short':'Over'});save();toast('Adjusted by '+sgn(diff));
   },{label:'Save count',hook:function(){var d=fd(),e=$('#cdiff');if(!e)return;if(d.cnt===''){e.textContent='';return}var df=r2(num(d.cnt)-exp);e.innerHTML=Math.abs(df)<0.005?'Matches your records.':(df<0?'<b class="red">Short by '+fmt(-df)+'</b>':'<b class="green">Over by '+fmt(df)+'</b>')+' — an adjustment will be recorded.'}});
 }
 
@@ -744,7 +890,7 @@ function ewForm(kind){
     var a=num(d.amt),fee=num(d.fee);if(a<=0){toast('Enter an amount');return false}
     if(d.mode==='deduct'&&fee>a){toast('The fee is bigger than the amount');return false}
     var e=ewEffects(kind,a,fee,d.mode);
-    S.tx.push({id:uid(),ts:Date.now(),type:'ew',kind:kind,wid:d.wid,amount:a,fee:fee,mode:d.mode,cash:e.cash,wal:e.wal,note:(d.note||'').trim()});
+    S.tx.push({id:uid(),ts:now(),type:'ew',kind:kind,wid:d.wid,amount:a,fee:fee,mode:d.mode,cash:e.cash,wal:e.wal,note:(d.note||'').trim()});
     save();toast(name+' recorded');
   },{label:'Record '+name.toLowerCase(),hook:function(el){
     var d=fd(),a=num(d.amt);
@@ -764,13 +910,13 @@ function ewForm(kind){
 function moveForm(){
   form('Move money',function(){return sel('Direction','dir',[['fund','Drawer cash → e-wallet (top up)'],['withdraw','E-wallet → drawer cash (withdraw)']],'fund')+sel('Wallet','wid',walletOpts(),S.wallets[0]&&S.wallets[0].id)+field('Amount (₱)','amt','',{num:1})+field('Note (optional)','note','')},
   function(d){var a=num(d.amt);if(a<=0){toast('Enter an amount');return false}
-    var f=d.dir==='fund';S.tx.push({id:uid(),ts:Date.now(),type:'move',wid:d.wid,cash:f?-a:a,wal:f?a:-a,note:(d.note||'').trim()});save();toast('Moved '+fmt(a))});
+    var f=d.dir==='fund';S.tx.push({id:uid(),ts:now(),type:'move',wid:d.wid,cash:f?-a:a,wal:f?a:-a,note:(d.note||'').trim()});save();toast('Moved '+fmt(a))});
 }
 function adjWalletForm(id){
   var cur=calc().wal[id];
   form('Match '+wname(id)+' balance',function(){return '<p class="hint" style="margin-top:0">Your records say <b>'+fmt(cur)+'</b>. Enter what the app actually shows.</p>'+field('Actual balance (₱)','bal','',{num:1,neg:1})},
   function(d){if(d.bal===''){toast('Enter the balance');return false}var df=r2(num(d.bal)-cur);if(Math.abs(df)<0.005){toast('Already matches');return true}
-    S.tx.push({id:uid(),ts:Date.now(),type:'adjust_wallet',wid:id,wal:df,note:df<0?'Lower than recorded':'Higher than recorded'});save();toast('Adjusted by '+sgn(df))},{label:'Save balance'});
+    S.tx.push({id:uid(),ts:now(),type:'adjust_wallet',wid:id,wal:df,note:df<0?'Lower than recorded':'Higher than recorded'});save();toast('Adjusted by '+sgn(df))},{label:'Save balance'});
 }
 
 /* custom item + cart */
@@ -813,7 +959,7 @@ function checkout(){
   cart.lines=cart.lines.filter(function(l){return l.qty>0});
   var tot=cartTotal();if(!cart.lines.length||tot<=0){toast('Add something to the cart first');return false}
   if(cart.pay==='utang'&&!cart.sid){toast('Choose whose utang this is');return false}
-  var t={id:uid(),ts:Date.now(),type:'sale',lines:cart.lines.map(function(l){return {iid:l.iid,name:l.name,qty:l.qty,price:l.price,cost:l.cost}}),rev:tot,cogs:r2(cart.lines.reduce(function(a,l){return a+l.qty*l.cost},0)),note:(cart.note||'').trim(),
+  var t={id:uid(),ts:now(),type:'sale',lines:cart.lines.map(function(l){var it=l.iid&&item(l.iid);return {iid:l.iid,name:l.name,qty:l.qty,price:l.price,cost:l.cost,biz:(it&&it.biz)||'store'}}),rev:tot,cogs:r2(cart.lines.reduce(function(a,l){return a+l.qty*l.cost},0)),note:(cart.note||'').trim(),
     stk:cart.lines.filter(function(l){var it=l.iid&&item(l.iid);return it&&!it.svc}).map(function(l){return {iid:l.iid,q:-l.qty}})};
   if(cart.pay==='cash')t.cash=tot;
   else if(cart.pay==='utang'){t.sid=cart.sid;t.debt=tot}
@@ -859,7 +1005,7 @@ function exportData(){
     var u=URL.createObjectURL(new Blob([data],{type:'application/json'})),a=document.createElement('a');
     a.href=u;a.download=fn;document.body.appendChild(a);a.click();a.remove();
     setTimeout(function(){URL.revokeObjectURL(u)},4000);
-    S.lastBackup=Date.now();save();toast('Backup saved to your downloads');
+    S.lastBackup=now();save();toast('Backup saved to your downloads');
   }catch(e){showText('Backup',data)}
 }
 function importForm(){
@@ -916,13 +1062,21 @@ function helpBody(){return '<div class="help">'+
  '<p>Find the entry in Money → Ledger or in the suki\'s history and press <b>Void</b>. Everything it touched — cash, stock, utang, wallet — is put back.</p>'+
 
  '<h3>Do not lose your records</h3>'+
- '<p>Everything lives on this one device. <b>Settings → Back up data</b> saves a file — do it weekly and keep it somewhere safe. <b>Restore backup</b> brings it back on a new phone. Clearing browser data or deleting the app erases everything.</p>'+
+ '<p>Everything lives on this one device — the phone and the laptop each keep their own books. <b>Settings → Back up data</b> saves a file; Home reminds you after two days without one. <b>Restore backup</b> brings it back on a new phone. Clearing browser data or deleting the app erases everything.</p>'+
 
- '<h3>Billiards and other services</h3>'+
- '<p>Add the game like any item — <b>Stock → Add item</b>, name it <b>Billiard game</b>, put the price per game, and tick <b>This is a service</b>. Then every game is rung up on <b>Sell</b> exactly like a softdrink: tap it, Checkout, take the money. One tap per game, whoever is playing and however long they take.</p>'+
+ '<h3>The billiard hall</h3>'+
+ '<p>Add the game like any item — <b>Stock → Add item</b>, name it <b>Billiard game</b>, put the price per game, set <b>Which business</b> to <b>Billiard hall</b>, and tick <b>This is a service</b>. Then every game is rung up on <b>Sell</b> exactly like a softdrink: tap it, Checkout, take the money. One tap per game, whoever is playing and however long they take.</p>'+
+ '<p>To change the price, open <b>Stock → Edit</b> on that item. Different rates — a regular game and a tournament game, say — are simply two items with two prices.</p>'+
+ '<p><b>Money → By business</b> then keeps the two apart: what the store earned, what the hall earned, each with its own sales, costs and expenses. When you record an expense, choose which business pays for it.</p>'+
+
+ '<h3>How the business is doing</h3>'+
+ '<p>The card at the top of Home reads the last 7 days against the 7 before and says it plainly — profit or loss, sales up or down, how much of every peso you keep, utang that has gone stale, shelves that have run empty. Green means fine, yellow means watch it, red means deal with it now.</p>'+
+
+ '<h3>The calculator</h3>'+
+ '<p>The round <b>=</b> button floats over every screen. Tap it to open the calculator, drag it anywhere that suits your counter, and drag the panel by its title bar. It stays where you leave it.</p>'+
 
  '<h3>PIN lock</h3>'+
- '<p><b>Settings → Set a PIN</b> scrambles the records on this device so only the PIN opens them. It re-locks by itself 5 minutes after you put the phone down. <b>Nobody can recover a forgotten PIN</b> — a backup file is saved before the lock switches on, so keep it.</p>'+
+ '<p><b>Settings → Set a PIN</b> (6 digits) scrambles the records on this device so only the PIN opens them. It re-locks by itself 5 minutes after you put the phone down. Once a PIN is set, <b>voiding a sale asks for it</b> — so nobody can quietly erase a sale and pocket the cash. <b>Nobody can recover a forgotten PIN</b>: a backup file is saved before the lock switches on, so keep it.</p>'+
 
  '<h3>Barcode scanner gun (laptop)</h3>'+
  '<p>Plug it in, open <b>Sell</b>, and scan — the item goes straight into the cart. It works on the Stock page too, where it opens Restock for that item.</p>'+
@@ -1079,7 +1233,7 @@ document.addEventListener('keydown',function(e){
    ponytail: 40ms between keys is the tell — a real typist is slower. Raise it if a gun is missed. */
 var gun={buf:'',t:0};
 document.addEventListener('keydown',function(e){
-  if(modal||e.ctrlKey||e.altKey||e.metaKey)return;
+  if(modal||calc9.open||e.ctrlKey||e.altKey||e.metaKey)return;
   if(ui.view!=='sell'&&ui.view!=='stock')return;
   var t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'))return;
   var now=Date.now();
@@ -1146,11 +1300,13 @@ var ACT={
   moreledger:function(){ui.ledgerN+=40;render()},
   void:function(id){
     var reopen=modal&&modal.reopen;
-    ask('Void this entry? Cash, wallet, stock and utang balances will be reversed. The entry stays in the ledger, marked voided.','Void entry',function(){
+    var doVoid=function(){
       var t=S.tx.find(function(x){return x.id===id});
       if(!t)return;
-      t.void=Date.now();save();toast('Entry voided');
-    },reopen);
+      t.void=now();save();toast('Entry voided');
+    };
+    if(crypt){askPin('Void entry','Erasing a sale needs the PIN. Cash, wallet, stock and utang balances will be reversed, and the entry stays in the ledger marked voided.',doVoid);return}
+    ask('Void this entry? Cash, wallet, stock and utang balances will be reversed. The entry stays in the ledger, marked voided.','Void entry',doVoid,reopen);
   },
   export:function(){exportData()},
   import:function(){importForm()},
@@ -1211,7 +1367,7 @@ function saveEnc(){
   encBusy=true;
   var json=JSON.stringify(S),iv=crypto.getRandomValues(new Uint8Array(12));
   crypto.subtle.encrypt({name:'AES-GCM',iv:iv},crypt.key,TE.encode(json)).then(function(ct){
-    localStorage.setItem(KEY,JSON.stringify({enc:1,salt:b64(crypt.salt),iv:b64(iv),ct:b64(ct)}));
+    return writeStore(JSON.stringify({enc:1,salt:b64(crypt.salt),iv:b64(iv),ct:b64(ct)}));
   }).catch(function(){
     if(!memOnly){memOnly=true;toast('Could not save — back up now.')}
   }).then(function(){
@@ -1229,7 +1385,7 @@ function lockScreen(msg){
   setTimeout(function(){var e=$('#pinin');if(e)e.focus()},60);
 }
 function tryUnlock(pin){
-  var raw;try{raw=JSON.parse(localStorage.getItem(KEY))}catch(e){raw=null}
+  var raw;try{raw=JSON.parse(store.raw)}catch(e){raw=null}
   if(!raw||!raw.enc){locked=false;render();return}
   var salt=unb64(raw.salt);
   $('#lockmsg').textContent='Checking…';
@@ -1238,7 +1394,7 @@ function tryUnlock(pin){
       var st=parseState(TD.decode(pt));
       if(!st)throw 0;
       S=st;crypt={key:key,salt:salt};locked=false;stamp++;
-      document.body.classList.remove('lock');render();
+      document.body.classList.remove('lock');var cf2=$('#calcfab');if(cf2)cf2.hidden=false;render();
     });
   }).catch(function(){
     var e=$('#lockmsg');if(e)e.textContent='Wrong PIN — try again.';
@@ -1252,11 +1408,11 @@ function lockNow(){
 }
 function pinForm(){
   form('Lock with a PIN',function(){return '<p class="hint" style="margin-top:0">Your records get scrambled on this device and only this PIN opens them.</p>'+
-    field('New PIN (4 digits or more)','p1','',{})+field('Type it again','p2','',{})+
+    field('New PIN (6 digits)','p1','',{num:1})+field('Type it again','p2','',{num:1})+
     '<div class="warn">There is no way to recover a forgotten PIN. A backup file is downloaded before the lock is switched on — keep it somewhere safe.</div>'},
   function(d){
     var p1=(d.p1||'').trim(),p2=(d.p2||'').trim();
-    if(p1.length<4){toast('Use at least 4 characters');return false}
+    if(!/^d{6,}$/.test(p1)){toast('Use 6 digits or more');return false}
     if(p1!==p2){toast('The two PINs do not match');return false}
     exportData();                                   /* never lock records that have no backup */
     var salt=crypto.getRandomValues(new Uint8Array(16));
@@ -1264,6 +1420,23 @@ function pinForm(){
       crypt={key:key,salt:salt};save();toast('PIN set — the app now asks for it when opened');
     }).catch(function(){toast('This browser cannot set a PIN here')});
   },{label:'Turn on the lock',cls:'btn-red'});
+}
+/* Re-derives from the entered PIN and tries the real ciphertext: no PIN is ever stored
+   to compare against, so this is the only honest way to check one. */
+function verifyPin(pin){
+  var raw;try{raw=JSON.parse(store.raw)}catch(e){raw=null}
+  if(!raw||!raw.enc)return Promise.resolve(false);
+  return deriveKey(pin,unb64(raw.salt))
+    .then(function(k){return crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(raw.iv)},k,unb64(raw.ct))})
+    .then(function(){return true},function(){return false});
+}
+function askPin(title,msg,ok){
+  form(title,function(){return '<p class="hint" style="margin-top:0">'+esc(msg)+'</p>'+field('PIN','pin','',{num:1})},
+  function(d){
+    var p=(d.pin||'').trim();if(!p){toast('Enter the PIN');return false}
+    toast('Checking…');
+    verifyPin(p).then(function(good){good?ok():toast('Wrong PIN — nothing was changed')});
+  },{label:'Confirm',cls:'btn-red'});
 }
 function removePin(){
   ask('Remove the PIN? Your records go back to being readable by anyone who opens this device.','Remove PIN',function(){
@@ -1284,7 +1457,125 @@ document.addEventListener('submit',function(e){
   var i=$('#pinin');if(i&&i.value)tryUnlock(i.value);
 });
 
-if(locked)lockScreen();else render();
+/* ---------- floating calculator ----------
+   A till needs a calculator more often than it needs any screen in this app, so it rides
+   above every view and remembers where it was put down.
+   ponytail: left-to-right with precedence via one Function() over a digits-and-operators
+   whitelist. Only these buttons can write the expression, so there is nothing to inject. */
+var calc9={x:null,y:null,px:null,py:null,open:false,exp:'',out:'0'};
+try{var cs=JSON.parse(localStorage.getItem(KEY+'.calc')||'null');if(cs)Object.assign(calc9,cs,{open:false})}catch(e){}
+function calcSave(){try{localStorage.setItem(KEY+'.calc',JSON.stringify({x:calc9.x,y:calc9.y,px:calc9.px,py:calc9.py}))}catch(e){}}
+function clampPos(x,y,w,h){
+  return [Math.max(6,Math.min(x,innerWidth-w-6)),Math.max(6,Math.min(y,innerHeight-h-6))];
+}
+function calcMount(){
+  var fab=document.createElement('button');
+  fab.className='calcfab';fab.id='calcfab';fab.type='button';
+  fab.setAttribute('aria-label','Calculator');fab.textContent='=';
+  var p=document.createElement('div');
+  p.className='calcpanel';p.id='calcpanel';p.hidden=true;
+  p.setAttribute('role','dialog');p.setAttribute('aria-label','Calculator');
+  var keys=[['C','c'],['←','b'],['%','%'],['÷','/'],
+            ['7','7'],['8','8'],['9','9'],['×','*'],
+            ['4','4'],['5','5'],['6','6'],['−','-'],
+            ['1','1'],['2','2'],['3','3'],['+','+'],
+            ['0','0'],['.','.'],['=','='],['✕','x']];
+  p.innerHTML='<div class="calcbar" id="calcbar"><b>Calculator</b><button class="btn btn-ghost btn-sm" type="button" data-k="x" aria-label="Close calculator">Close</button></div>'+
+    '<div class="calcexp" id="calcexp"></div><div class="calcout" id="calcout">0</div>'+
+    '<div class="calcpad">'+keys.map(function(k){
+      var cls=/[c b % \/ \* \- \+]/.test(k[1])&&k[1]!=='.'&&!/^[0-9]$/.test(k[1])?'op':'';
+      if(k[1]==='=')cls='eq';
+      return '<button type="button" class="'+cls+'" data-k="'+k[1]+'">'+k[0]+'</button>';
+    }).join('')+'</div>';
+  document.body.appendChild(fab);document.body.appendChild(p);
+
+  var fp=clampPos(calc9.x==null?innerWidth-70:calc9.x, calc9.y==null?innerHeight-150:calc9.y, 52,52);
+  fab.style.left=fp[0]+'px';fab.style.top=fp[1]+'px';
+
+  drag(fab,fab,function(x,y){calc9.x=x;calc9.y=y;calcSave()},function(moved){if(!moved)calcToggle()});
+  drag(p,p.querySelector('#calcbar'),function(x,y){calc9.px=x;calc9.py=y;calcSave()});
+
+  p.addEventListener('click',function(e){
+    var b=e.target.closest('button[data-k]');if(b)calcKey(b.dataset.k);
+  });
+  window.addEventListener('resize',function(){
+    var q=clampPos(parseFloat(fab.style.left),parseFloat(fab.style.top),52,52);
+    fab.style.left=q[0]+'px';fab.style.top=q[1]+'px';
+  });
+}
+/* One pointer-drag helper for both the bubble and the panel. */
+function drag(el,handle,done,tap){
+  var sx=0,sy=0,ox=0,oy=0,moved=false,id=null;
+  handle.addEventListener('pointerdown',function(e){
+    if(e.target.closest('button[data-k]')&&handle!==el)return;
+    id=e.pointerId;moved=false;sx=e.clientX;sy=e.clientY;
+    ox=parseFloat(el.style.left)||el.getBoundingClientRect().left;
+    oy=parseFloat(el.style.top)||el.getBoundingClientRect().top;
+    handle.setPointerCapture(id);el.classList.add('drag');
+  });
+  handle.addEventListener('pointermove',function(e){
+    if(id===null||e.pointerId!==id)return;
+    var dx=e.clientX-sx,dy=e.clientY-sy;
+    if(Math.abs(dx)>4||Math.abs(dy)>4)moved=true;
+    if(!moved)return;
+    e.preventDefault();
+    var r=el.getBoundingClientRect(),q=clampPos(ox+dx,oy+dy,r.width,r.height);
+    el.style.left=q[0]+'px';el.style.top=q[1]+'px';
+  });
+  function up(e){
+    if(id===null||e.pointerId!==id)return;
+    el.classList.remove('drag');
+    try{handle.releasePointerCapture(id)}catch(_){}
+    id=null;
+    if(moved)done(parseFloat(el.style.left),parseFloat(el.style.top));
+    if(tap)tap(moved);
+  }
+  handle.addEventListener('pointerup',up);handle.addEventListener('pointercancel',up);
+}
+function calcToggle(){
+  var p=$('#calcpanel');calc9.open=!calc9.open;p.hidden=!calc9.open;
+  if(calc9.open){
+    var r=p.getBoundingClientRect();
+    var q=clampPos(calc9.px==null?(innerWidth-r.width)/2:calc9.px, calc9.py==null?Math.max(60,innerHeight-r.height-90):calc9.py, r.width,r.height);
+    p.style.left=q[0]+'px';p.style.top=q[1]+'px';
+  }
+}
+function calcKey(k){
+  if(k==='x'){calc9.open=true;calcToggle();return}
+  if(k==='c'){calc9.exp='';calc9.out='0'}
+  else if(k==='b')calc9.exp=calc9.exp.slice(0,-1);
+  else if(k==='='){
+    var v=calcEval(calc9.exp);
+    if(v===null)calc9.out='Cannot compute';
+    else{calc9.out=fmtnum(v);calc9.exp=String(v)}
+  }
+  else if(k==='%'){var v2=calcEval(calc9.exp);if(v2!==null){calc9.exp=String(v2/100);calc9.out=fmtnum(v2/100)}}
+  else calc9.exp+=k;
+  if(k!=='='&&k!=='%'){var lv=calcEval(calc9.exp);calc9.out=lv===null?(calc9.exp||'0'):fmtnum(lv)}
+  $('#calcexp').textContent=calc9.exp.replace(/\*/g,'×').replace(/\//g,'÷');
+  $('#calcout').textContent=calc9.out;
+}
+function fmtnum(v){return (Math.round(v*1e6)/1e6).toLocaleString('en-PH',{maximumFractionDigits:6})}
+function calcEval(e){
+  if(!e||!/^[0-9+\-*/.() ]+$/.test(e))return null;      /* only what the buttons can produce */
+  try{var v=Function('"use strict";return ('+e+')')();return (typeof v==='number'&&isFinite(v))?v:null}
+  catch(_){return null}
+}
+calcMount();
+syncClock();
+
+function boot(){
+  return readStore().then(function(raw){
+    store.raw=raw;
+    if(!raw)return;
+    if(raw.indexOf('"enc"')>=0){try{if(JSON.parse(raw).enc){locked=true;return}}catch(e){}}
+    try{var st=parseState(raw);if(st){S=st;stamp++;return}}catch(e){}
+    try{localStorage.setItem(KEY+'.broken',raw)}catch(e){}   /* keep the unreadable copy instead of erasing it */
+  }).catch(function(){}).then(function(){
+    if(locked)lockScreen();else render();
+  });
+}
+boot();
 
 if('serviceWorker' in navigator&&location.protocol!=='file:'){
   window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});
