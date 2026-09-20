@@ -46,6 +46,21 @@ Sell the item lands in the cart, on Stock it opens Restock for that item.
 The **?** button in the header opens a walkthrough of every screen, written for someone
 who has never used it. It is also offered on the first-run setup card.
 
+## Two businesses, two cash drawers
+
+Each item belongs to a business (`biz`: `store` or `billiard`), set in *Stock → Edit*.
+Money shows profit per business, and each keeps its own cash drawer with its own starting
+amount.
+
+`cashSplit(t)` is the single rule for which drawer an entry moves. A cash sale pays into
+the drawer of whatever was sold; a cart mixing a softdrink with a game carries `t.cb`,
+split by what each line sold for, with any stray centavo going to the larger share.
+Restocking is charged to the item's business. Entries with no business are the store's, so
+records made before this change read exactly as before.
+
+Open the app with `#selftest`, or call `tindahanSelftest()` in a console, to run the
+drawer-arithmetic checks. It uses a throwaway state and restores the real one.
+
 ## Syncing between devices
 
 Off by default — each device keeps its own records. *Settings → Turn on syncing* makes one
