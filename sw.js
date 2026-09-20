@@ -1,5 +1,5 @@
 /* Offline cache. Bump V whenever index.html or vendor/ changes. */
-var V = 'tindahan-v5';
+var V = 'tindahan-v6';
 var ASSETS = [
   './',
   './index.html',

@@ -1435,7 +1435,12 @@ function askPin(title,msg,ok){
   function(d){
     var p=(d.pin||'').trim();if(!p){toast('Enter the PIN');return false}
     toast('Checking…');
-    verifyPin(p).then(function(good){good?ok():toast('Wrong PIN — nothing was changed')});
+    /* The sheet has already closed and redrawn by the time this resolves, so the
+       screen must be redrawn again once the change actually lands. */
+    verifyPin(p).then(function(good){
+      if(!good){toast('Wrong PIN — nothing was changed');return}
+      ok();render();
+    });
   },{label:'Confirm',cls:'btn-red'});
 }
 function removePin(){
