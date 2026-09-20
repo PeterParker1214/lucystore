@@ -186,6 +186,13 @@ input[type=checkbox]{width:auto;min-height:0;accent-color:var(--palm)}
 .help p,.help li{margin:.3rem 0;font-size:.95rem;line-height:1.45}
 .help ol,.help ul{margin:.3rem 0;padding-left:1.25rem}
 .help b{font-weight:800}
+.lockwrap{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:1.25rem;background:var(--bg)}
+.lockbox{width:100%;max-width:22rem;text-align:center}
+.lockbox h1{font-size:1.6rem;margin:.9rem 0 .2rem}
+.lockbox p{color:var(--soft);font-size:.9rem;margin:0 0 1.1rem}
+.lockbox input{width:100%;text-align:center;letter-spacing:.4em;font-size:1.4rem;padding:.7rem;border:2px solid var(--edge);border-radius:12px;background:var(--field);color:var(--ink)}
+.lockmsg{min-height:1.3rem;margin:.6rem 0;font-weight:700;font-size:.9rem;color:var(--tomato)}
+.li.voided .t,.li.voided .s{text-decoration:line-through;opacity:.55}
 .scantorch{position:absolute;right:.5rem;bottom:.5rem;z-index:2;min-height:36px;padding:.3rem .7rem;border:2px solid var(--edge);border-radius:10px;background:var(--panel);color:var(--ink);font-weight:700;font-size:.85rem;cursor:pointer}
 .scantorch[aria-pressed="true"]{background:var(--sun);color:var(--on-sun)}
 .scanhits div{font-size:.82rem;color:var(--soft);font-weight:600;padding:.12rem 0}
@@ -266,16 +273,33 @@ var CATS=['Groceries','Drinks','Snacks','Personal care','Household','Other'];
 var EXP_CATS=['Electricity','Water','Rent','Transport','Packaging & supplies','Repairs','Wages','Other'];
 function fresh(){return {v:1,store:{name:'My Sari-sari Store',feePer500:10,openingCash:0},wallets:[{id:'gcash',name:'GCash',opening:0},{id:'maribank',name:'MariBank',opening:0}],items:[],suki:[],tx:[],setup:false,lastBackup:0}}
 var memOnly=false;
+/* Drops __proto__ while parsing, so a tampered backup cannot poison Object.prototype. */
+function parseState(raw){
+  var s=JSON.parse(raw,function(k,v){return k==='__proto__'?undefined:v});
+  if(!s||!Array.isArray(s.tx)||!Array.isArray(s.items))return null;
+  var f=fresh();
+  var o=Object.assign(f,s,{store:Object.assign(f.store,s.store||{})});
+  if(!Array.isArray(o.wallets)||!o.wallets.length)o.wallets=fresh().wallets;   /* a backup with no wallets used to crash checkout */
+  return o;
+}
+var crypt=null,locked=false;
 function load(){
   var raw=null;
   try{raw=localStorage.getItem(KEY)}catch(e){memOnly=true;return fresh()}
   if(!raw)return fresh();
-  try{var s=JSON.parse(raw);if(s&&Array.isArray(s.tx)&&Array.isArray(s.items)){var f=fresh();return Object.assign(f,s,{store:Object.assign(f.store,s.store||{})})}}catch(e){}
+  if(raw.indexOf('"enc"')>=0){try{if(JSON.parse(raw).enc){locked=true;return fresh()}}catch(e){}}
+  try{var st=parseState(raw);if(st)return st}catch(e){}
   try{localStorage.setItem(KEY+'.broken',raw)}catch(e){}   /* keep the unreadable copy instead of erasing it */
   return fresh();
 }
 var S=load();
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){memOnly=true}}
+var stamp=0;   /* bumped on every save; calc() caches against it */
+function save(){
+  stamp++;
+  if(crypt){saveEnc();return}
+  try{localStorage.setItem(KEY,JSON.stringify(S))}
+  catch(e){if(!memOnly){memOnly=true;toast('Out of room — this is NOT being saved. Back up now.')}}
+}
 var ui={view:'home',sellQ:'',stockQ:'',stockF:'all',period:'today',ledgerN:30};
 var cart={lines:[],pay:'cash',sid:'',wid:'',given:'',note:''};
 var modal=null, C=null;
@@ -287,12 +311,17 @@ function wname(id){var w=wallet(id);return w?w.name:'E-wallet'}
 function sname(id){var s=suki(id);return s?s.name:'Unknown suki'}
 
 /* ---------- derived balances ---------- */
+var calcCache=null,calcStamp=-1;
 function calc(){
+  if(calcCache&&calcStamp===stamp)return calcCache;
+  calcStamp=stamp;return calcCache=calcRaw();
+}
+function calcRaw(){
   var cash=+S.store.openingCash||0,wal={},debt={},stock={},chunks={};
   S.wallets.forEach(function(w){wal[w.id]=+w.opening||0});
-  S.items.forEach(function(i){stock[i.id]=+i.start||0});
+  S.items.forEach(function(i){if(!i.svc)stock[i.id]=+i.start||0});   /* a service has nothing to count */
   S.suki.forEach(function(s){debt[s.id]=0;chunks[s.id]=[]});
-  var txs=S.tx.slice().sort(function(a,b){return a.ts-b.ts});
+  var txs=S.tx.filter(function(t){return !t.void}).sort(function(a,b){return a.ts-b.ts});
   txs.forEach(function(t){
     cash+=t.cash||0;
     if(t.wid&&(t.wid in wal))wal[t.wid]+=t.wal||0;
@@ -323,7 +352,7 @@ function cashCat(t){
 function summ(from,to){
   var r={rev:0,cogs:0,fee:0,exp:0,n:0,cashIn:0,cashOut:0,inBy:{},outBy:{}};
   S.tx.forEach(function(t){
-    if(t.ts<from||t.ts>=to)return;
+    if(t.void||t.ts<from||t.ts>=to)return;
     if(t.type==='sale'){r.rev+=t.rev||0;r.cogs+=t.cogs||0;r.n++}
     r.fee+=t.fee||0;r.exp+=t.exp||0;
     var c=t.cash||0;
@@ -409,8 +438,8 @@ function txChips(t){
   return c?'<div class="chips2">'+c+'</div>':'';
 }
 function txRow(t,noVoid){
-  return '<div class="li"><div class="grow"><div class="t">'+esc(txTitle(t))+'</div><div class="s">'+esc(txSub(t))+'</div>'+txChips(t)+'</div>'+
-    (noVoid?'':'<button class="btn btn-ghost btn-sm" data-act="void" data-id="'+t.id+'" aria-label="Void this entry">Void</button>')+'</div>';
+  return '<div class="li'+(t.void?' voided':'')+'"><div class="grow"><div class="t">'+esc(txTitle(t))+(t.void?' '+tag('Voided','r'):'')+'</div><div class="s">'+esc(txSub(t))+'</div>'+(t.void?'':txChips(t))+'</div>'+
+    (noVoid||t.void?'':'<button class="btn btn-ghost btn-sm" data-act="void" data-id="'+t.id+'" aria-label="Void this entry">Void</button>')+'</div>';
 }
 
 /* ---------- shell + views ---------- */
@@ -444,9 +473,10 @@ function viewHome(c){
   var wtot=S.wallets.reduce(function(a,w){return a+c.wal[w.id]},0);
   var g=new Date().getHours(),hello=g<12?'Good morning!':g<18?'Good afternoon!':'Good evening!';
   var days=dayBuckets(t0-6*DAY,t0+DAY),wk=days.reduce(function(a,d){return a+d.sales},0);
-  var low=S.items.filter(function(i){return i.reorder>0&&c.stock[i.id]<=i.reorder}).sort(function(a,b){return (c.stock[a.id]/a.reorder)-(c.stock[b.id]/b.reorder)});
+  var low=S.items.filter(function(i){return !i.svc&&i.reorder>0&&c.stock[i.id]<=i.reorder}).sort(function(a,b){return (c.stock[a.id]/a.reorder)-(c.stock[b.id]/b.reorder)});
   var recent=S.tx.slice().sort(function(a,b){return b.ts-a.ts}).slice(0,5);
   var h='<div class="pagehead"><p>'+new Date().toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric'})+'</p><h1>'+hello+'</h1></div><div class="stack">';
+  if(S.tx.length&&Date.now()-(S.lastBackup||0)>7*DAY)h+='<div class="card bg-tomato"><div class="cardhead"><h2>Back up your records</h2></div><p style="margin:0 0 .7rem">'+(S.lastBackup?'Last backup was '+plural(Math.floor((Date.now()-S.lastBackup)/DAY),'day')+' ago.':'You have never backed up.')+' Everything here lives only on this device — if it is lost or wiped, so are your records.</p><button class="btn btn-red" data-act="export">Back up now</button></div>';
   if(!S.setup)h+='<div class="card bg-sea"><div class="cardhead"><h2>Set up your store</h2></div><p style="margin:0 0 .7rem">Enter your starting drawer cash and e-wallet balances so every total is correct from day one, then add your items in Stock.</p><div class="rowbtns"><button class="btn btn-blue" data-act="settings">Enter starting balances</button><button class="btn" data-act="help">How to use it</button><button class="btn btn-ghost" data-act="dismisssetup">Later</button></div></div>';
   h+='<div class="card hero"><div class="kicker">Cash in drawer</div><div class="bigval" style="font-size:2.8rem;margin-top:.3rem">'+fmt(c.cash)+'</div><div style="font-size:.85rem;margin-top:.4rem;opacity:.85">What the cash box should hold right now, based on your records.</div></div>';
   h+='<div class="grid2"><div class="card"><div class="kicker">Sales today</div><div class="bigval" style="font-size:1.7rem;margin-top:.2rem">'+fmt(td.rev)+'</div><div class="soft" style="font-size:.8rem">'+plural(td.n,'sale')+'</div></div>'+
@@ -471,7 +501,11 @@ function productGrid(){
   var list=S.items.filter(function(i){return !q||i.name.toLowerCase().indexOf(q)>=0||(i.cat||'').toLowerCase().indexOf(q)>=0||(i.code||'').indexOf(q)>=0}).sort(function(a,b){return a.name.localeCompare(b.name)});
   if(!S.items.length)return empty('No items yet','Add your products first, or load sample items to try it out.','<button class="btn btn-green" data-act="additem">'+ic('plus',18)+'Add item</button> <button class="btn" data-act="sample">Load sample items</button>');
   if(!list.length)return empty('No match','Try another word, or ring it up as a custom item.');
-  return '<div class="prods">'+list.map(function(i){var st=C.stock[i.id],lowc=i.reorder>0&&st<=i.reorder;return '<button class="prod'+(lowc?' low':'')+'" data-act="addcart" data-id="'+i.id+'"><b>'+esc(i.name)+'</b><span class="p">'+fmt(i.price)+'</span><small>'+(st<=0?'Out of stock':st+' '+esc(i.unit||'left'))+'</small></button>'}).join('')+'</div>';
+  return '<div class="prods">'+list.map(function(i){
+    var st=C.stock[i.id],lowc=!i.svc&&i.reorder>0&&st<=i.reorder;
+    var sub=i.svc?'Per '+esc(i.unit||'game'):(st<=0?'Out of stock':st+' '+esc(i.unit||'left'));
+    return '<button class="prod'+(lowc?' low':'')+'" data-act="addcart" data-id="'+i.id+'"><b>'+esc(i.name)+'</b><span class="p">'+fmt(i.price)+'</span><small>'+sub+'</small></button>';
+  }).join('')+'</div>';
 }
 function viewSell(c){
   var sales=S.tx.filter(function(t){return t.type==='sale'}).sort(function(a,b){return b.ts-a.ts}).slice(0,6);
@@ -493,22 +527,22 @@ function stockRows(c){
   var list=S.items.filter(function(i){
     var st=c.stock[i.id];
     if(q&&i.name.toLowerCase().indexOf(q)<0&&(i.cat||'').toLowerCase().indexOf(q)<0&&(i.code||'').indexOf(q)<0)return false;
-    if(ui.stockF==='low')return i.reorder>0&&st<=i.reorder&&st>0;
-    if(ui.stockF==='out')return st<=0;
+    if(ui.stockF==='low')return !i.svc&&i.reorder>0&&st<=i.reorder&&st>0;
+    if(ui.stockF==='out')return !i.svc&&st<=0;
     return true;
   }).sort(function(a,b){return a.name.localeCompare(b.name)});
   if(!S.items.length)return empty('No items yet','Add what you sell, with its cost and selling price.','<button class="btn btn-green" data-act="additem">'+ic('plus',18)+'Add item</button> <button class="btn" data-act="sample">Load sample items</button>');
   if(!list.length)return empty('Nothing here','No items match this filter.');
   return '<div class="list">'+list.map(function(i){
     var st=c.stock[i.id],margin=i.price-i.cost,mp=i.price>0?Math.round(margin/i.price*100):0;
-    var stag=st<=0?tag('Out of stock','r'):(i.reorder>0&&st<=i.reorder)?tag('Low','s'):tag('OK','g');
+    var stag=i.svc?tag('Service','b'):st<=0?tag('Out of stock','r'):(i.reorder>0&&st<=i.reorder)?tag('Low','s'):tag('OK','g');
     return '<div class="li" style="align-items:flex-start"><div class="grow"><div class="t">'+esc(i.name)+' '+stag+'</div><div class="s">'+esc(i.cat||'')+' · Cost '+fmt(i.cost)+' · Price '+fmt(i.price)+' · Margin '+fmt(margin)+' ('+mp+'%)</div>'+
-      '<div class="rowbtns"><button class="btn btn-sm btn-green" data-act="restock" data-id="'+i.id+'">Restock</button><button class="btn btn-sm" data-act="adjstock" data-id="'+i.id+'">Adjust</button><button class="btn btn-sm" data-act="edititem" data-id="'+i.id+'">Edit</button></div></div>'+
-      '<div class="amt num" style="font-size:1.25rem">'+(+st.toFixed(2))+'<div class="s" style="font-weight:600">'+esc(i.unit||'pcs')+'</div></div></div>'}).join('')+'</div>';
+      '<div class="rowbtns">'+(i.svc?'':'<button class="btn btn-sm btn-green" data-act="restock" data-id="'+i.id+'">Restock</button><button class="btn btn-sm" data-act="adjstock" data-id="'+i.id+'">Adjust</button>')+'<button class="btn btn-sm" data-act="edititem" data-id="'+i.id+'">Edit</button></div></div>'+
+      '<div class="amt num" style="font-size:1.25rem">'+(i.svc?'—':(+st.toFixed(2))+'<div class="s" style="font-weight:600">'+esc(i.unit||'pcs')+'</div>')+'</div></div>'}).join('')+'</div>';
 }
 function viewStock(c){
   var cost=0,retail=0,lowN=0;
-  S.items.forEach(function(i){var st=Math.max(0,c.stock[i.id]);cost+=st*i.cost;retail+=st*i.price;if(i.reorder>0&&c.stock[i.id]<=i.reorder)lowN++});
+  S.items.forEach(function(i){if(i.svc)return;var st=Math.max(0,c.stock[i.id]);cost+=st*i.cost;retail+=st*i.price;if(i.reorder>0&&c.stock[i.id]<=i.reorder)lowN++});
   return '<div class="pagehead" style="display:flex;justify-content:space-between;align-items:flex-end;gap:.6rem"><div><h1>Inventory</h1><p>'+plural(S.items.length,'item')+' tracked</p></div><button class="btn" data-act="scanstock">'+ic('scan',18)+'Scan</button> <button class="btn btn-green" data-act="additem">'+ic('plus',18)+'Add item</button></div>'+
    '<div class="grid4"><div class="card flat"><div class="kicker">Stock value (cost)</div><div class="bigval num" style="font-size:1.25rem;margin-top:.2rem">'+fmt(cost)+'</div></div><div class="card flat"><div class="kicker">If all sold</div><div class="bigval num" style="font-size:1.25rem;margin-top:.2rem">'+fmt(retail)+'</div></div><div class="card flat"><div class="kicker">Potential profit</div><div class="bigval num green" style="font-size:1.25rem;margin-top:.2rem">'+fmt(retail-cost)+'</div></div><div class="card flat bg-sun"><div class="kicker">Need restock</div><div class="bigval" style="font-size:1.25rem;margin-top:.2rem">'+lowN+'</div></div></div>'+
    '<div class="search" style="margin-top:.8rem"><span class="sr"><label for="stockSearch">Search inventory</label></span>'+ic('search',18)+'<input id="stockSearch" data-input="stockQ" type="search" placeholder="Search name or barcode" value="'+esc(ui.stockQ)+'" autocomplete="off"></div>'+
@@ -597,7 +631,9 @@ function itemForm(id,draft){
     '<div class="field"><label for="f_code">Barcode (optional)</label><div style="display:flex;gap:.5rem"><input id="f_code" name="code" type="text" inputmode="numeric" value="'+esc(v.code||'')+'" placeholder="Scan or type" autocomplete="off" style="flex:1"><button type="button" class="btn" data-act="scanitem" data-id="'+(id||'')+'">'+ic('scan',18)+'Scan</button></div><div class="hint">Scan it once and this item rings itself up at the counter.</div></div>'+
     '<div class="two">'+field('Category','cat',v.cat,{list:'cats'})+field('Sold per','unit',v.unit,{ph:'pc, kg, sachet'})+'</div>'+
     '<div class="two">'+field('Cost price (₱)','cost',v.cost,{num:1})+field('Selling price (₱)','price',v.price,{num:1})+'</div>'+
+    '<label class="check"><input type="checkbox" name="svc" value="1"'+(v.svc?' checked':'')+'> This is a service, not a product (no stock to count)</label>'+
     '<div class="two">'+(it?'':field('Stock on hand now','start',v.start,{num:1}))+field('Reorder when stock ≤','reorder',v.reorder,{num:1})+'</div>'+
+    '<div class="hint">Tick the box for things like a billiard game, a haircut or a photocopy — it sells and earns like any item, but nothing is deducted from a shelf.</div>'+
     '<datalist id="cats">'+CATS.map(function(c){return '<option value="'+c+'">'}).join('')+'</datalist>'+
     (it?'<button type="button" class="btn btn-red btn-sm" data-act="delitem" data-id="'+id+'">Delete item</button>':'')},
   function(d){
@@ -605,7 +641,7 @@ function itemForm(id,draft){
     if(num(d.price)<=0){toast('Enter a selling price');return false}
     var code=(d.code||'').trim(),clash=code?itemByCode(code):null;
     if(clash&&(!it||clash.id!==it.id)){toast('That barcode is already on '+clash.name);return false}
-    var o={name:name,cat:(d.cat||'Other').trim(),unit:(d.unit||'pc').trim(),cost:num(d.cost),price:num(d.price),reorder:num(d.reorder),code:code};
+    var o={name:name,cat:(d.cat||'Other').trim(),unit:(d.unit||'pc').trim(),cost:num(d.cost),price:num(d.price),reorder:num(d.reorder),code:code,svc:!!d.svc};
     if(it)Object.assign(it,o);else S.items.push(Object.assign({id:uid(),start:num(d.start)},o));
     save();toast(it?'Item updated':'Item added');
   });
@@ -778,8 +814,14 @@ function checkout(){
   var tot=cartTotal();if(!cart.lines.length||tot<=0){toast('Add something to the cart first');return false}
   if(cart.pay==='utang'&&!cart.sid){toast('Choose whose utang this is');return false}
   var t={id:uid(),ts:Date.now(),type:'sale',lines:cart.lines.map(function(l){return {iid:l.iid,name:l.name,qty:l.qty,price:l.price,cost:l.cost}}),rev:tot,cogs:r2(cart.lines.reduce(function(a,l){return a+l.qty*l.cost},0)),note:(cart.note||'').trim(),
-    stk:cart.lines.filter(function(l){return l.iid}).map(function(l){return {iid:l.iid,q:-l.qty}})};
-  if(cart.pay==='cash')t.cash=tot;else if(cart.pay==='utang'){t.sid=cart.sid;t.debt=tot}else{t.wid=cart.wid||S.wallets[0].id;t.wal=tot}
+    stk:cart.lines.filter(function(l){var it=l.iid&&item(l.iid);return it&&!it.svc}).map(function(l){return {iid:l.iid,q:-l.qty}})};
+  if(cart.pay==='cash')t.cash=tot;
+  else if(cart.pay==='utang'){t.sid=cart.sid;t.debt=tot}
+  else{
+    var w=cart.wid||(S.wallets[0]&&S.wallets[0].id);
+    if(!w){toast('Add an e-wallet in Settings first');return false}
+    t.wid=w;t.wal=tot;
+  }
   S.tx.push(t);save();
   var msg='Sale recorded — '+fmt(tot);if(cart.pay==='cash'&&num(cart.given)>tot)msg+=' · change '+fmt(num(cart.given)-tot);
   cart={lines:[],pay:'cash',sid:'',wid:'',given:'',note:''};toast(msg);
@@ -792,7 +834,14 @@ function settingsForm(){
     '<div class="lbl">E-wallets — starting balance</div>'+S.wallets.map(function(w){return '<div class="two">'+field('Name','wn_'+w.id,w.name)+field('Balance (₱)','wo_'+w.id,w.opening,{num:1,neg:1})+'</div>'}).join('')+
     field('Add another wallet (optional)','newwallet','',{ph:'e.g. Maya'})+
     '<div class="note">Your data is saved in this browser on this device only. Back it up regularly so you never lose your records.</div>'+
-    '<div class="rowbtns" style="margin:.5rem 0 1rem"><button type="button" class="btn btn-sm" data-act="export">Back up data</button><button type="button" class="btn btn-sm" data-act="import">Restore backup</button><button type="button" class="btn btn-sm btn-red" data-act="reset">Erase everything</button></div>'},
+    '<div class="rowbtns" style="margin:.5rem 0 1rem"><button type="button" class="btn btn-sm" data-act="export">Back up data</button><button type="button" class="btn btn-sm" data-act="import">Restore backup</button><button type="button" class="btn btn-sm btn-red" data-act="reset">Erase everything</button></div>'+
+    '<div class="lbl">PIN lock</div>'+
+    (hasCrypto()
+      ? '<div class="note">'+(crypt?'This device asks for a PIN before showing your records, and locks itself again after 5 minutes away.':'Anyone who opens this device can read and change your records.')+'</div>'+
+        '<div class="rowbtns" style="margin:.5rem 0 1rem">'+(crypt
+          ? '<button type="button" class="btn btn-sm" data-act="locknow">Lock now</button><button type="button" class="btn btn-sm" data-act="setpin">Change PIN</button><button type="button" class="btn btn-sm btn-red" data-act="rmpin">Remove PIN</button>'
+          : '<button type="button" class="btn btn-sm btn-red" data-act="setpin">Set a PIN</button>')+'</div>'
+      : '<div class="note">A PIN needs the app opened over https or from the installed icon.</div>')},
   function(d){
     S.store.name=(d.sname||'').trim()||'My Sari-sari Store';S.store.openingCash=num(d.open);S.store.feePer500=num(d.fee);
     S.wallets.forEach(function(w){var n=(d['wn_'+w.id]||'').trim();if(n)w.name=n;w.opening=num(d['wo_'+w.id])});
@@ -818,7 +867,7 @@ function importForm(){
     '<input id="bkfile" type="file" accept="application/json,.json" style="margin-bottom:.7rem">'+
     '<textarea name="json" rows="8" placeholder="Paste backup text here"></textarea>'},
   function(d){
-    try{var s=JSON.parse(d.json||'');if(!s||!Array.isArray(s.tx)||!Array.isArray(s.items))throw 0;var f=fresh();S=Object.assign(f,s,{store:Object.assign(f.store,s.store||{})});save();toast('Backup restored')}catch(e){toast('That doesn\'t look like a Tindahan backup');return false}
+    try{var st=parseState(d.json||'');if(!st)throw 0;S=st;save();toast('Backup restored')}catch(e){toast('That doesn\'t look like a Tindahan backup');return false}
   },{label:'Restore',cls:'btn-red'});
 }
 var SAMPLE=[['Rice (per kilo)','Groceries','kg',48,55,25,5],['Instant noodles','Groceries','pack',13,16,30,10],['3-in-1 coffee sachet','Drinks','sachet',5.5,7,40,15],['Softdrink (small bottle)','Drinks','bottle',13,16,24,8],['Bottled water 500ml','Drinks','bottle',8,12,24,8],['Eggs','Groceries','pc',8,10,30,12],['Sugar (¼ kilo)','Groceries','pack',14,17,12,4],['Cooking oil sachet','Groceries','sachet',9,12,20,8],['Canned sardines','Groceries','can',20,25,12,5],['Laundry powder sachet','Household','sachet',6,8,30,10],['Bath soap bar','Personal care','pc',22,28,10,4],['Shampoo sachet','Personal care','sachet',4.5,6,40,15],['Candy','Snacks','pc',0.5,1,100,30],['Chips (small pack)','Snacks','pack',7,10,20,6]];
@@ -868,6 +917,12 @@ function helpBody(){return '<div class="help">'+
 
  '<h3>Do not lose your records</h3>'+
  '<p>Everything lives on this one device. <b>Settings → Back up data</b> saves a file — do it weekly and keep it somewhere safe. <b>Restore backup</b> brings it back on a new phone. Clearing browser data or deleting the app erases everything.</p>'+
+
+ '<h3>Billiards and other services</h3>'+
+ '<p>Add the game like any item — <b>Stock → Add item</b>, name it <b>Billiard game</b>, put the price per game, and tick <b>This is a service</b>. Then every game is rung up on <b>Sell</b> exactly like a softdrink: tap it, Checkout, take the money. One tap per game, whoever is playing and however long they take.</p>'+
+
+ '<h3>PIN lock</h3>'+
+ '<p><b>Settings → Set a PIN</b> scrambles the records on this device so only the PIN opens them. It re-locks by itself 5 minutes after you put the phone down. <b>Nobody can recover a forgotten PIN</b> — a backup file is saved before the lock switches on, so keep it.</p>'+
 
  '<h3>Barcode scanner gun (laptop)</h3>'+
  '<p>Plug it in, open <b>Sell</b>, and scan — the item goes straight into the cart. It works on the Stock page too, where it opens Restock for that item.</p>'+
@@ -1051,6 +1106,9 @@ var ACT={
   },
   settings:function(){settingsForm()},
   help:function(){helpSheet()},
+  setpin:function(){pinForm()},
+  rmpin:function(){removePin()},
+  locknow:function(){closeModal();lockNow()},
   dismisssetup:function(){S.setup=true;save();render()},
   additem:function(){itemForm()},
   edititem:function(id){itemForm(id)},
@@ -1086,7 +1144,14 @@ var ACT={
   adjwallet:function(id){adjWalletForm(id)},
   period:function(id){ui.period=id;ui.ledgerN=30;render()},
   moreledger:function(){ui.ledgerN+=40;render()},
-  void:function(id){var reopen=modal&&modal.reopen;ask('Void this entry? Cash, wallet, stock and utang balances will be reversed.','Void entry',function(){S.tx=S.tx.filter(function(t){return t.id!==id});save();toast('Entry voided')},reopen)},
+  void:function(id){
+    var reopen=modal&&modal.reopen;
+    ask('Void this entry? Cash, wallet, stock and utang balances will be reversed. The entry stays in the ledger, marked voided.','Void entry',function(){
+      var t=S.tx.find(function(x){return x.id===id});
+      if(!t)return;
+      t.void=Date.now();save();toast('Entry voided');
+    },reopen);
+  },
   export:function(){exportData()},
   import:function(){importForm()},
   reset:function(){ask('Erase <b>all</b> items, suki, sales and settings on this device? This cannot be undone. Back up first if unsure.','Erase everything',function(){S=fresh();save();cart={lines:[],pay:'cash',sid:'',wid:'',given:'',note:''};toast('Everything erased')})}
@@ -1125,7 +1190,102 @@ document.addEventListener('change',function(e){
 });
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&modal)closeModal()});
 
-render();
+/* ---------- PIN lock ----------
+   The PIN derives an AES-GCM key with PBKDF2; the saved records are ciphertext, so a
+   stolen phone gives up nothing without it. No PIN is stored anywhere — a wrong one
+   simply fails to decrypt, and a forgotten one cannot be recovered by anybody.
+   ponytail: 200k PBKDF2 rounds ~ 1s on an old phone. A 4-digit PIN is only strong
+   enough to stop a person holding the phone; use 6+ digits if that matters. */
+var TE=new TextEncoder(),TD=new TextDecoder();
+function b64(buf){var a=new Uint8Array(buf),s='';for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s)}
+function unb64(str){var b=atob(str),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a}
+function hasCrypto(){return !!(window.crypto&&window.crypto.subtle&&window.isSecureContext!==false)}
+function deriveKey(pin,salt){
+  return crypto.subtle.importKey('raw',TE.encode(pin),'PBKDF2',false,['deriveKey']).then(function(base){
+    return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:200000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  });
+}
+var encBusy=false,encAgain=false;
+function saveEnc(){
+  if(encBusy){encAgain=true;return}
+  encBusy=true;
+  var json=JSON.stringify(S),iv=crypto.getRandomValues(new Uint8Array(12));
+  crypto.subtle.encrypt({name:'AES-GCM',iv:iv},crypt.key,TE.encode(json)).then(function(ct){
+    localStorage.setItem(KEY,JSON.stringify({enc:1,salt:b64(crypt.salt),iv:b64(iv),ct:b64(ct)}));
+  }).catch(function(){
+    if(!memOnly){memOnly=true;toast('Could not save — back up now.')}
+  }).then(function(){
+    encBusy=false;if(encAgain){encAgain=false;saveEnc()}
+  });
+}
+function lockScreen(msg){
+  document.body.classList.add('lock');
+  $('#modal').innerHTML='';$('#cartbar').innerHTML='';
+  $('#app').innerHTML='<div class="lockwrap"><div class="lockbox">'+ic('store',44)+
+    '<h1>'+esc(S.store.name||'Tindahan')+'</h1><p>Enter your PIN to open your records.</p>'+
+    '<form id="pinform"><input id="pinin" type="password" inputmode="numeric" autocomplete="current-password" aria-label="PIN" placeholder="••••">'+
+    '<div id="lockmsg" class="lockmsg">'+esc(msg||'')+'</div>'+
+    '<button class="btn btn-red btn-block" type="submit">Unlock</button></form></div></div>';
+  setTimeout(function(){var e=$('#pinin');if(e)e.focus()},60);
+}
+function tryUnlock(pin){
+  var raw;try{raw=JSON.parse(localStorage.getItem(KEY))}catch(e){raw=null}
+  if(!raw||!raw.enc){locked=false;render();return}
+  var salt=unb64(raw.salt);
+  $('#lockmsg').textContent='Checking…';
+  deriveKey(pin,salt).then(function(key){
+    return crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(raw.iv)},key,unb64(raw.ct)).then(function(pt){
+      var st=parseState(TD.decode(pt));
+      if(!st)throw 0;
+      S=st;crypt={key:key,salt:salt};locked=false;stamp++;
+      document.body.classList.remove('lock');render();
+    });
+  }).catch(function(){
+    var e=$('#lockmsg');if(e)e.textContent='Wrong PIN — try again.';
+    var i=$('#pinin');if(i){i.value='';i.focus()}
+  });
+}
+function lockNow(){
+  if(!crypt)return;
+  save();S=fresh();calcCache=null;cart={lines:[],pay:'cash',sid:'',wid:'',given:'',note:''};
+  modal=null;locked=true;lockScreen();
+}
+function pinForm(){
+  form('Lock with a PIN',function(){return '<p class="hint" style="margin-top:0">Your records get scrambled on this device and only this PIN opens them.</p>'+
+    field('New PIN (4 digits or more)','p1','',{})+field('Type it again','p2','',{})+
+    '<div class="warn">There is no way to recover a forgotten PIN. A backup file is downloaded before the lock is switched on — keep it somewhere safe.</div>'},
+  function(d){
+    var p1=(d.p1||'').trim(),p2=(d.p2||'').trim();
+    if(p1.length<4){toast('Use at least 4 characters');return false}
+    if(p1!==p2){toast('The two PINs do not match');return false}
+    exportData();                                   /* never lock records that have no backup */
+    var salt=crypto.getRandomValues(new Uint8Array(16));
+    deriveKey(p1,salt).then(function(key){
+      crypt={key:key,salt:salt};save();toast('PIN set — the app now asks for it when opened');
+    }).catch(function(){toast('This browser cannot set a PIN here')});
+  },{label:'Turn on the lock',cls:'btn-red'});
+}
+function removePin(){
+  ask('Remove the PIN? Your records go back to being readable by anyone who opens this device.','Remove PIN',function(){
+    crypt=null;save();toast('PIN removed');
+  });
+}
+
+/* Auto-lock: a till left on the counter should not stay open. */
+var hidAt=0;
+document.addEventListener('visibilitychange',function(){
+  if(!crypt||locked)return;
+  if(document.hidden){hidAt=Date.now();save()}
+  else if(hidAt&&Date.now()-hidAt>5*60*1000)lockNow();
+});
+document.addEventListener('submit',function(e){
+  if(!e.target||e.target.id!=='pinform')return;
+  e.preventDefault();
+  var i=$('#pinin');if(i&&i.value)tryUnlock(i.value);
+});
+
+if(locked)lockScreen();else render();
+
 if('serviceWorker' in navigator&&location.protocol!=='file:'){
   window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});
 }

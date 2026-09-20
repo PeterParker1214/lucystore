@@ -1,7 +1,7 @@
 {
   "name": "tindahan",
   "productName": "Tindahan",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Inventory, cash flow, utang and e-wallet manager for a sari-sari store.",
   "main": "main.js",
   "private": true,
