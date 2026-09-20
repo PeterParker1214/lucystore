@@ -1,0 +1,31 @@
+{
+  "name": "tindahan",
+  "productName": "Tindahan",
+  "version": "1.0.0",
+  "description": "Inventory, cash flow, utang and e-wallet manager for a sari-sari store.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "ph.tindahan.app",
+    "files": ["main.js", "index.html", "manifest.webmanifest", "sw.js", "vendor/**", "icons/**"],
+    "win": {
+      "target": "nsis",
+      "icon": "icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Tindahan"
+    }
+  }
+}
