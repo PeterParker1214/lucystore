@@ -46,6 +46,25 @@ Sell the item lands in the cart, on Stock it opens Restock for that item.
 The **?** button in the header opens a walkthrough of every screen, written for someone
 who has never used it. It is also offered on the first-run setup card.
 
+## Syncing between devices
+
+Off by default — each device keeps its own records. *Settings → Turn on syncing* makes one
+account for the family, then **Start a new shop** (first device) or **Join** with the
+8-letter code (everyone else). All members see and edit everything.
+
+Every item, suki, wallet, setting and ledger entry is one row in `docs`, keyed by
+`kind`+`id`, so the protocol is: push the rows whose contents changed, pull the rows the
+server stamped since last time. The ledger is append-only with per-entry ids, so two
+phones selling at once cannot collide; items and suki are last-write-wins on the server
+clock. Deleting an item leaves a tombstone, or the next pull resurrects it. Sales made
+offline queue on the device and upload on reconnect.
+
+It talks to PostgREST and GoTrue over plain `fetch` — supabase-js would add 40 KB to do
+the same six requests. Backend lives in its own Supabase project (`tindahan`,
+ap-southeast-1); the schema and row-level-security policies are in that project's
+migrations. The publishable key in `index.html` is meant to be public: every table is
+gated by RLS on shop membership.
+
 ## Back up
 
 *Settings → Back up data* downloads a `.json` file. *Restore backup* takes that file
