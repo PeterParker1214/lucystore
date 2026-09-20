@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>Tindahan — Sari-sari Store Manager</title>
+<title>Lucy Store — Sari-sari Store Manager</title>
 <meta name="description" content="Inventory, cash flow, utang and e-wallet manager for a sari-sari store.">
-<meta name="application-name" content="Tindahan">
-<meta name="apple-mobile-web-app-title" content="Tindahan">
+<meta name="application-name" content="Lucy Store">
+<meta name="apple-mobile-web-app-title" content="Lucy Store">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -267,6 +267,9 @@ input[type=checkbox]{width:auto;min-height:0;accent-color:var(--palm)}
 'use strict';
 
 /* ---------- helpers ---------- */
+/* KEY and the IndexedDB name below stay 'tindahan.*' even though the app is now called
+   Lucy Store. They identify records already saved on the family's phones — renaming them
+   would leave every device looking at an empty store. Cosmetic only; never "tidy" these. */
 var KEY='tindahan.sarisari.v1', DAY=864e5;
 /* A phone with a wrong clock files sales on the wrong day. Whenever we are online we
    take the server's Date header and keep the offset, so every timestamp is real time.
@@ -320,7 +323,7 @@ var BIZ=[['store','Sari-sari store'],['billiard','Billiard hall']];
 function bizName(id){var b=BIZ.find(function(x){return x[0]===id});return b?b[1]:'Sari-sari store'}
 var CATS=['Groceries','Drinks','Snacks','Personal care','Household','Other'];
 var EXP_CATS=['Electricity','Water','Rent','Transport','Packaging & supplies','Repairs','Wages','Other'];
-function fresh(){return {v:1,store:{name:'My Sari-sari Store',feePer500:10,openingCash:0,opening:{store:0,billiard:0}},wallets:[{id:'gcash',name:'GCash',opening:0},{id:'maribank',name:'MariBank',opening:0}],items:[],suki:[],tx:[],setup:false,lastBackup:0}}
+function fresh(){return {v:1,store:{name:'Lucy Store',feePer500:10,openingCash:0,opening:{store:0,billiard:0}},wallets:[{id:'gcash',name:'GCash',opening:0},{id:'maribank',name:'MariBank',opening:0}],items:[],suki:[],tx:[],setup:false,lastBackup:0}}
 var memOnly=false;
 /* Drops __proto__ while parsing, so a tampered backup cannot poison Object.prototype. */
 function parseState(raw){
@@ -560,11 +563,11 @@ var NAV=[['home','Home','store'],['sell','Sell','cart'],['stock','Stock','box'],
 var TITLES={home:'',sell:'Sell',stock:'Inventory',utang:'Utang',wallet:'E-Wallet',money:'Money'};
 function shell(body){
   return '<div class="shell"><svg class="awning" aria-hidden="true" focusable="false"><defs><pattern id="awn" width="64" height="26" patternUnits="userSpaceOnUse"><path d="M0 0H32V10a16 16 0 0 1-32 0z" fill="var(--tomato)"/><path d="M32 0H64V10a16 16 0 0 1-32 0z" fill="var(--panel)"/><path d="M0 10a16 16 0 0 0 32 0M32 10a16 16 0 0 0 32 0" fill="none" stroke="var(--edge)" stroke-width="2"/></pattern></defs><rect width="100%" height="26" fill="url(#awn)"/></svg>'+
-  '<div class="wrap"><div class="top"><div class="brand"><b>'+esc(S.store.name||'My Sari-sari Store')+'</b><span>'+(memOnly?'⚠ Not saving — use Settings › Back up':'Saved on this device')+'</span></div>'+
-  '<div class="rowbtns" style="margin:0;flex:none"><button class="btn btn-sm" data-act="help" aria-label="How to use Tindahan">?</button>'+
+  '<div class="wrap"><div class="top"><div class="brand"><b>'+esc(S.store.name||'Lucy Store')+'</b><span>'+(memOnly?'⚠ Not saving — use Settings › Back up':'Saved on this device')+'</span></div>'+
+  '<div class="rowbtns" style="margin:0;flex:none"><button class="btn btn-sm" data-act="help" aria-label="How to use Lucy Store">?</button>'+
   '<button class="btn btn-sm" data-act="settings" aria-label="Settings">'+ic('gear',18)+'<span>Settings</span></button></div></div>'+
   '<main id="main">'+body+'</main></div>'+
-  '<nav class="navbar" aria-label="Main menu"><div class="sidebrand">'+ic('store',24)+' Tindahan</div>'+
+  '<nav class="navbar" aria-label="Main menu"><div class="sidebrand">'+ic('store',24)+' Lucy Store</div>'+
   NAV.map(function(n){return '<button class="navbtn" data-act="go" data-id="'+n[0]+'"'+(ui.view===n[0]?' aria-current="page"':'')+'>'+ic(n[2],22,ui.view===n[0]?2.6:2)+'<span>'+n[1]+'</span></button>'}).join('')+'</nav></div>';
 }
 function head(t,p){return '<div class="pagehead"><h1>'+esc(t)+'</h1>'+(p?'<p>'+esc(p)+'</p>':'')+'</div>'}
@@ -1071,7 +1074,7 @@ function settingsForm(){
           : '<button type="button" class="btn btn-sm btn-red" data-act="setpin">Set a PIN</button>')+'</div>'
       : '<div class="note">A PIN needs the app opened over https or from the installed icon.</div>')},
   function(d){
-    S.store.name=(d.sname||'').trim()||'My Sari-sari Store';
+    S.store.name=(d.sname||'').trim()||'Lucy Store';
     S.store.opening=S.store.opening||{};
     BIZ.forEach(function(b){S.store.opening[b[0]]=num(d['op_'+b[0]])});
     S.store.openingCash=S.store.opening.store;   /* kept so an older copy of the app still reads it */
@@ -1086,7 +1089,7 @@ function showText(title,text){
   setTimeout(function(){var e=$('#bk');if(e){e.focus();e.select()}},60);
 }
 function exportData(){
-  var data=JSON.stringify(S),fn='tindahan-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  var data=JSON.stringify(S),fn='lucystore-backup-'+new Date().toISOString().slice(0,10)+'.json';
   try{
     var u=URL.createObjectURL(new Blob([data],{type:'application/json'})),a=document.createElement('a');
     a.href=u;a.download=fn;document.body.appendChild(a);a.click();a.remove();
@@ -1099,7 +1102,7 @@ function importForm(){
     '<input id="bkfile" type="file" accept="application/json,.json" style="margin-bottom:.7rem">'+
     '<textarea name="json" rows="8" placeholder="Paste backup text here"></textarea>'},
   function(d){
-    try{var st=parseState(d.json||'');if(!st)throw 0;S=st;save();toast('Backup restored')}catch(e){toast('That doesn\'t look like a Tindahan backup');return false}
+    try{var st=parseState(d.json||'');if(!st)throw 0;S=st;save();toast('Backup restored')}catch(e){toast('That doesn\'t look like a Lucy Store backup');return false}
   },{label:'Restore',cls:'btn-red'});
 }
 var SAMPLE=[['Rice (per kilo)','Groceries','kg',48,55,25,5],['Instant noodles','Groceries','pack',13,16,30,10],['3-in-1 coffee sachet','Drinks','sachet',5.5,7,40,15],['Softdrink (small bottle)','Drinks','bottle',13,16,24,8],['Bottled water 500ml','Drinks','bottle',8,12,24,8],['Eggs','Groceries','pc',8,10,30,12],['Sugar (¼ kilo)','Groceries','pack',14,17,12,4],['Cooking oil sachet','Groceries','sachet',9,12,20,8],['Canned sardines','Groceries','can',20,25,12,5],['Laundry powder sachet','Household','sachet',6,8,30,10],['Bath soap bar','Personal care','pc',22,28,10,4],['Shampoo sachet','Personal care','sachet',4.5,6,40,15],['Candy','Snacks','pc',0.5,1,100,30],['Chips (small pack)','Snacks','pack',7,10,20,6]];
@@ -1124,7 +1127,7 @@ function helpBody(){return '<div class="help">'+
 
  '<h3>If the camera will not open</h3>'+
  '<ul><li>Allow the camera the first time the phone asks.</li>'+
- '<li>Open Tindahan from the home-screen icon, not from inside Messenger or Facebook — those mini-browsers block the camera.</li>'+
+ '<li>Open Lucy Store from the home-screen icon, not from inside Messenger or Facebook — those mini-browsers block the camera.</li>'+
  '<li>Dark shop? Tap <b>Light</b> on the camera box.</li>'+
  '<li>Still nothing: type the numbers under the barcode into the box and continue. Scanning itself does not need internet.</li></ul>'+
 
@@ -1181,7 +1184,7 @@ function helpBody(){return '<div class="help">'+
  '<h3>Barcode scanner gun (laptop)</h3>'+
  '<p>Plug it in, open <b>Sell</b>, and scan — the item goes straight into the cart. It works on the Stock page too, where it opens Restock for that item.</p>'+
  '</div>'}
-function helpSheet(){openModal({title:'How to use Tindahan',body:helpBody,focus:false})}
+function helpSheet(){openModal({title:'How to use Lucy Store',body:helpBody,focus:false})}
 
 /* ---------- actions ---------- */
 /* ---------- barcode scanning ---------- */
@@ -1259,7 +1262,7 @@ function startScan(){
     var n=(e&&e.name)||'';
     scanMsg(n==='NotAllowedError'||n==='SecurityError'
       ?'Camera blocked. Allow the camera for this page in your browser settings, then tap Scan again — or type the barcode below.'
-      :'Could not open the camera. Close other apps using it, or open Tindahan from your home screen — or type the barcode below.','warn');
+      :'Could not open the camera. Close other apps using it, or open Lucy Store from your home screen — or type the barcode below.','warn');
   });
 }
 function useZXing(v){
@@ -1486,7 +1489,7 @@ function lockScreen(msg){
   document.body.classList.add('lock');
   $('#modal').innerHTML='';$('#cartbar').innerHTML='';
   $('#app').innerHTML='<div class="lockwrap"><div class="lockbox">'+ic('store',44)+
-    '<h1>'+esc(S.store.name||'Tindahan')+'</h1><p>Enter your PIN to open your records.</p>'+
+    '<h1>'+esc(S.store.name||'Lucy Store')+'</h1><p>Enter your PIN to open your records.</p>'+
     '<form id="pinform"><input id="pinin" type="password" inputmode="numeric" autocomplete="current-password" aria-label="PIN" placeholder="••••">'+
     '<div id="lockmsg" class="lockmsg">'+esc(msg||'')+'</div>'+
     '<button class="btn btn-red btn-block" type="submit">Unlock</button></form></div></div>';
@@ -1968,7 +1971,7 @@ function boot(){
     try{var st=parseState(raw);if(st){S=st;stamp++;return}}catch(e){}
     try{localStorage.setItem(KEY+'.broken',raw)}catch(e){}   /* keep the unreadable copy instead of erasing it */
   }).catch(function(){}).then(function(){
-    window.tindahanSelftest=selftest;          /* also runnable from the console */
+    window.lucyStoreSelftest=selftest;          /* also runnable from the console */
     if(location.hash==='#selftest'){selftest();return}
     if(locked)lockScreen();else{render();syncNow(true)}
   });

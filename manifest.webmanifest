@@ -1,6 +1,6 @@
 {
- "name": "Tindahan — Sari-sari Store Manager",
- "short_name": "Tindahan",
+ "name": "Lucy Store — Sari-sari Store Manager",
+ "short_name": "Lucy Store",
  "description": "Inventory, cash flow, utang and e-wallet manager for a sari-sari store.",
  "start_url": "./",
  "scope": "./",

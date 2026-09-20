@@ -1,8 +1,11 @@
-# Tindahan — Sari-sari Store Manager
+# Lucy Store — Sari-sari Store Manager
 
 Inventory, cash flow, utang and e-wallet manager for a sari-sari store. Everything is
-stored on the device that runs it — no account, no server, no internet needed after the
-first load.
+stored on the device that runs it and works with no internet after the first load.
+Syncing between the family's devices is optional and off until you turn it on.
+
+The saved-data keys are still named `tindahan.*` — that is deliberate. They identify
+records already on the family's phones, and renaming them would orphan every device.
 
 ## Use it on a phone
 
@@ -17,7 +20,7 @@ must be allowed the first time.
 
 ## Install it on Windows
 
-Download `Tindahan-Setup-<version>.exe` from the **Releases** page and run it. It
+Download `Lucy-Store-Setup-<version>.exe` from the **Releases** page and run it. It
 installs for the current user, adds a desktop shortcut, and needs no admin rights.
 
 Windows SmartScreen will warn about an unknown publisher because the installer is not
@@ -58,7 +61,7 @@ split by what each line sold for, with any stray centavo going to the larger sha
 Restocking is charged to the item's business. Entries with no business are the store's, so
 records made before this change read exactly as before.
 
-Open the app with `#selftest`, or call `tindahanSelftest()` in a console, to run the
+Open the app with `#selftest`, or call `lucyStoreSelftest()` in a console, to run the
 drawer-arithmetic checks. It uses a throwaway state and restores the real one.
 
 ## Syncing between devices
