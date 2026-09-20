@@ -1698,9 +1698,12 @@ function newShopNow(){
 /* Joining a shop that already has records, from a device that also has records, is the one
    moment sync can double-count. Ask instead of guessing. */
 function linkShop(sh,joined){
-  sy.shop={id:sh.id,name:sh.name,code:sh.join_code};sy.since=null;sy.sent={};sy.gone={};sySave();
+  var same=sy.shop&&sy.shop.id===sh.id;                 /* re-joining the shop we are already in */
+  sy.shop={id:sh.id,name:sh.name,code:sh.join_code};
+  if(!same){sy.since=null;sy.sent={};sy.gone={}}
+  sySave();
   closeModal();
-  if(!joined||!S.tx.length){finishLink();return}
+  if(same||!joined||!S.tx.length){finishLink();return}
   syRest('docs?shop_id=eq.'+sh.id+'&select=kind&limit=1').then(function(rows){
     if(!rows||!rows.length){finishLink();return}
     openModal({title:'Two sets of records',body:function(){return '<p class="hint" style="margin-top:0">This device already has '+plural(S.tx.length,'entry').replace('entrys','entries')+', and the shop you joined has its own. Which is the real one?</p>'+
