@@ -15,7 +15,14 @@
   },
   "build": {
     "appId": "ph.tindahan.app",
-    "files": ["main.js", "index.html", "manifest.webmanifest", "sw.js", "vendor/**", "icons/**"],
+    "files": [
+      "main.js",
+      "index.html",
+      "manifest.webmanifest",
+      "sw.js",
+      "vendor/**",
+      "icons/**"
+    ],
     "win": {
       "target": "nsis",
       "icon": "icons/icon.ico"
@@ -27,5 +34,8 @@
       "createDesktopShortcut": true,
       "shortcutName": "Tindahan"
     }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
   }
 }
