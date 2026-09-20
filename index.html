@@ -217,6 +217,7 @@ input[type=checkbox]{width:auto;min-height:0;accent-color:var(--palm)}
 .calcpad button.op{background:var(--panel2,var(--field));color:var(--sun)}
 .calcpad button.eq{background:var(--tomato);color:#fff}
 .calcpad button:active{transform:translateY(1px)}
+.split{display:flex;flex-wrap:wrap;gap:.15rem 1rem;font-size:.85rem;opacity:.9;margin:.1rem 0 .2rem}
 .hl{list-style:none;margin:.2rem 0 0;padding:0}
 .hl li{position:relative;padding-left:1.4rem;margin:.35rem 0;font-size:.92rem;line-height:1.4}
 .hl li:before{position:absolute;left:0;font-weight:900}
@@ -319,7 +320,7 @@ var BIZ=[['store','Sari-sari store'],['billiard','Billiard hall']];
 function bizName(id){var b=BIZ.find(function(x){return x[0]===id});return b?b[1]:'Sari-sari store'}
 var CATS=['Groceries','Drinks','Snacks','Personal care','Household','Other'];
 var EXP_CATS=['Electricity','Water','Rent','Transport','Packaging & supplies','Repairs','Wages','Other'];
-function fresh(){return {v:1,store:{name:'My Sari-sari Store',feePer500:10,openingCash:0},wallets:[{id:'gcash',name:'GCash',opening:0},{id:'maribank',name:'MariBank',opening:0}],items:[],suki:[],tx:[],setup:false,lastBackup:0}}
+function fresh(){return {v:1,store:{name:'My Sari-sari Store',feePer500:10,openingCash:0,opening:{store:0,billiard:0}},wallets:[{id:'gcash',name:'GCash',opening:0},{id:'maribank',name:'MariBank',opening:0}],items:[],suki:[],tx:[],setup:false,lastBackup:0}}
 var memOnly=false;
 /* Drops __proto__ while parsing, so a tampered backup cannot poison Object.prototype. */
 function parseState(raw){
@@ -328,6 +329,7 @@ function parseState(raw){
   var f=fresh();
   var o=Object.assign(f,s,{store:Object.assign(f.store,s.store||{})});
   if(!Array.isArray(o.wallets)||!o.wallets.length)o.wallets=fresh().wallets;   /* a backup with no wallets used to crash checkout */
+  if(!o.store.opening){o.store.opening={store:+o.store.openingCash||0,billiard:0}}   /* one drawer became two */
   return o;
 }
 var crypt=null,locked=false;
@@ -399,13 +401,16 @@ function calc(){
   calcStamp=stamp;return calcCache=calcRaw();
 }
 function calcRaw(){
-  var cash=+S.store.openingCash||0,wal={},debt={},stock={},chunks={};
+  var op=S.store.opening||{store:+S.store.openingCash||0,billiard:0};
+  var drawer={};BIZ.forEach(function(b){drawer[b[0]]=+op[b[0]]||0});
+  var wal={},debt={},stock={},chunks={};
   S.wallets.forEach(function(w){wal[w.id]=+w.opening||0});
   S.items.forEach(function(i){if(!i.svc)stock[i.id]=+i.start||0});   /* a service has nothing to count */
   S.suki.forEach(function(s){debt[s.id]=0;chunks[s.id]=[]});
   var txs=S.tx.filter(function(t){return !t.void}).sort(function(a,b){return a.ts-b.ts});
   txs.forEach(function(t){
-    cash=r2(cash+(t.cash||0));
+    var cs=cashSplit(t);
+    if(cs)Object.keys(cs).forEach(function(b){if(b in drawer)drawer[b]=r2(drawer[b]+cs[b]);else drawer.store=r2(drawer.store+cs[b])});
     if(t.wid&&(t.wid in wal))wal[t.wid]=r2(wal[t.wid]+(t.wal||0));
     if(t.sid&&(t.sid in debt)){
       var d=t.debt||0;debt[t.sid]=r2(debt[t.sid]+d);var ch=chunks[t.sid];
@@ -417,7 +422,17 @@ function calcRaw(){
   var age={};
   Object.keys(chunks).forEach(function(id){age[id]=(chunks[id].length&&debt[id]>0.005)?Math.floor((now()-chunks[id][0].ts)/DAY):0});
   Object.keys(stock).forEach(function(k){stock[k]=r2(stock[k])});
-  return {cash:r2(cash),wal:wal,debt:debt,stock:stock,age:age};
+  var tot=0;Object.keys(drawer).forEach(function(k){tot=r2(tot+drawer[k])});
+  return {cash:tot,drawer:drawer,wal:wal,debt:debt,stock:stock,age:age};
+}
+/* Which drawer each entry moves, and by how much. Everything that counts cash goes
+   through here, so there is one rule rather than one per entry type.
+   A sale that mixes a softdrink with a game carries t.cb, split by what each line sold
+   for. Everything older, and everything without a business, is the store's. */
+function cashSplit(t){
+  var c=t.cash||0;if(!c)return null;
+  if(t.cb)return t.cb;
+  var m={};m[t.biz||'store']=c;return m;
 }
 function cashCat(t){
   switch(t.type){
@@ -577,7 +592,7 @@ function viewHome(c){
   if(S.tx.length&&now()-(S.lastBackup||0)>2*DAY)h+='<div class="card bg-tomato"><div class="cardhead"><h2>Back up your records</h2></div><p style="margin:0 0 .7rem">'+(S.lastBackup?'Last backup was '+plural(Math.floor((now()-S.lastBackup)/DAY),'day')+' ago.':'You have never backed up.')+' Everything here lives only on this device — if it is lost or wiped, so are your records.</p><button class="btn btn-red" data-act="export">Back up now</button></div>';
   h+=healthCard(c);
   if(!S.setup)h+='<div class="card bg-sea"><div class="cardhead"><h2>Set up your store</h2></div><p style="margin:0 0 .7rem">Enter your starting drawer cash and e-wallet balances so every total is correct from day one, then add your items in Stock.</p><div class="rowbtns"><button class="btn btn-blue" data-act="settings">Enter starting balances</button><button class="btn" data-act="help">How to use it</button><button class="btn btn-ghost" data-act="dismisssetup">Later</button></div></div>';
-  h+='<div class="card hero"><div class="kicker">Cash in drawer</div><div class="bigval" style="font-size:2.8rem;margin-top:.3rem">'+fmt(c.cash)+'</div><div style="font-size:.85rem;margin-top:.4rem;opacity:.85">What the cash box should hold right now, based on your records.</div></div>';
+  h+='<div class="card hero"><div class="kicker">Cash in drawer</div><div class="bigval" style="font-size:2.8rem;margin-top:.3rem">'+fmt(c.cash)+'</div>'+drawerSplit(c)+'<div style="font-size:.85rem;margin-top:.4rem;opacity:.85">What the cash boxes should hold right now, based on your records.</div></div>';
   h+='<div class="grid2"><div class="card"><div class="kicker">Sales today</div><div class="bigval" style="font-size:1.7rem;margin-top:.2rem">'+fmt(td.rev)+'</div><div class="soft" style="font-size:.8rem">'+plural(td.n,'sale')+'</div></div>'+
      '<div class="card bg-palm"><div class="kicker">Profit today</div><div class="bigval" style="font-size:1.7rem;margin-top:.2rem">'+fmt(td.earn)+'</div><div class="soft" style="font-size:.8rem">Sales profit + wallet fees</div></div>'+
      '<div class="card bg-tomato"><div class="kicker">Owed by suki</div><div class="bigval" style="font-size:1.7rem;margin-top:.2rem">'+fmt(owed)+'</div><div class="soft" style="font-size:.8rem">'+debtors.length+' suki'+(overdue.length?' · '+overdue.length+' overdue':'')+'</div></div>'+
@@ -711,11 +726,18 @@ function health(c){
   if(overdue>0)bad.push(fmt(overdue)+' of utang is over 14 days old.');
   if(sellable&&out/sellable>=0.2)bad.push(out+' of '+sellable+' items are out of stock — customers are leaving empty-handed.');
   else if(out)bad.push(plural(out,'item')+' out of stock.');
-  if(c.cash<0)bad.push('The drawer is recorded as negative — something was entered wrong.');
+  BIZ.forEach(function(b){if(c.drawer[b[0]]<0)bad.push(b[1]+' cash is recorded as negative — something was entered wrong.')});
   var st=!bad.length?['g','Doing well']
         :(wk.net<0&&wk.n)?['r','Needs attention']
         :bad.length>=3?['r','Needs attention']:['s','Keep an eye on it'];
   return {cls:st[0],label:st[1],good:good,bad:bad,wk:wk};
+}
+/* Only worth showing once the second business has money of its own. */
+function drawerSplit(c){
+  if(!BIZ.filter(function(b){return c.drawer[b[0]]}).length)return '';
+  return '<div class="split">'+BIZ.map(function(b){
+    return '<span>'+esc(b[1])+' <b>'+fmt(c.drawer[b[0]])+'</b></span>';
+  }).join('')+'</div>';
 }
 function healthCard(c){
   if(!S.tx.length)return '';
@@ -735,7 +757,7 @@ function viewMoney(c){
   var ledger=S.tx.filter(function(t){return t.ts>=pr.from&&t.ts<pr.to}).sort(function(a,b){return b.ts-a.ts});
   var days=(pr.to-pr.from)/DAY>1?dayBuckets(pr.from,Math.min(pr.to,startOfDay(now())+DAY)):null;
   return head('Money','Cash flow, profit and your full ledger.')+'<div class="stack">'+
-   '<div class="card hero"><div class="kicker">Cash in drawer</div><div class="bigval" style="font-size:2.4rem;margin:.3rem 0 .7rem">'+fmt(c.cash)+'</div><div class="rowbtns" style="margin:0"><button class="btn btn-sm" data-act="count">Count cash</button><button class="btn btn-sm" data-act="expense">Add expense</button><button class="btn btn-sm" data-act="owner">Owner in / out</button></div></div>'+
+   '<div class="card hero"><div class="kicker">Cash in drawer</div><div class="bigval" style="font-size:2.4rem;margin:.3rem 0 .3rem">'+fmt(c.cash)+'</div>'+drawerSplit(c)+'<div class="rowbtns" style="margin:.7rem 0 0"><button class="btn btn-sm" data-act="count">Count cash</button><button class="btn btn-sm" data-act="expense">Add expense</button><button class="btn btn-sm" data-act="owner">Owner in / out</button></div></div>'+
    '<div class="chips" role="group" aria-label="Period" style="margin:0">'+[['today','Today'],['7d','7 days'],['30d','30 days'],['month','This month']].map(function(p){return '<button class="chip" data-act="period" data-id="'+p[0]+'" aria-pressed="'+(ui.period===p[0])+'">'+p[1]+'</button>'}).join('')+'</div>'+
    '<div class="card"><div class="cardhead"><h2>Profit — '+esc(pr.label)+'</h2></div>'+
     '<div class="kv"><span>Sales ('+plural(r.n,'sale')+')</span><b class="num">'+fmt(r.rev)+'</b></div><div class="kv sub"><span>− Cost of goods sold</span><span class="num">'+fmt(r.cogs)+'</span></div>'+
@@ -813,7 +835,7 @@ function restockForm(id){
     var total=r2(q*cost),t={id:uid(),ts:now(),type:'restock',lines:[{iid:id,name:it.name,qty:q,cost:cost}],stk:[{iid:id,q:q}],purch:total,note:(d.note||'').trim()};
     if(d.from==='cash')t.cash=-total;else if(d.from&&d.from.indexOf('w:')===0){t.wid=d.from.slice(2);t.wal=-total}
     if(d.upd&&cost>0)it.cost=cost;
-    S.tx.push(t);save();toast('Restocked '+it.name);
+    t.biz=it.biz||'store';S.tx.push(t);save();toast('Restocked '+it.name);
   },{hook:function(){var d=fd();var e=$('#rtotal');if(e)e.textContent='Total: '+fmt(num(d.qty)*num(d.cost))}});
 }
 function adjustForm(id){
@@ -867,18 +889,44 @@ function expenseForm(){
     t.biz=d.biz||'store';S.tx.push(t);save();toast('Expense recorded')});
 }
 function ownerForm(){
-  form('Owner cash in / out',function(){return sel('What happened?','dir',[['in','I put my own money in'],['out','I took money out (personal use)']],'in')+field('Amount (₱)','amt','',{num:1})+field('Note (optional)','note','')+'<div class="hint">This moves cash but does not count as profit or an expense.</div>'},
+  form('Owner cash in / out',function(){return sel('What happened?','dir',[['in','I put my own money in'],['out','I took money out (personal use)']],'in')+field('Amount (₱)','amt','',{num:1})+sel('Which drawer?','biz',BIZ,'store')+field('Note (optional)','note','')+'<div class="hint">This moves cash but does not count as profit or an expense.</div>'},
   function(d){var a=num(d.amt);if(a<=0){toast('Enter an amount');return false}
-    S.tx.push({id:uid(),ts:now(),type:'owner',cash:d.dir==='in'?a:-a,note:(d.note||'').trim()});save();toast('Recorded')});
+    S.tx.push({id:uid(),ts:now(),type:'owner',cash:d.dir==='in'?a:-a,biz:d.biz||'store',note:(d.note||'').trim()});save();toast('Recorded')});
 }
 function countForm(){
-  var exp=calc().cash;
-  form('Count your cash',function(){return '<p class="hint" style="margin-top:0">Your records say the drawer should hold <b>'+fmt(exp)+'</b>. Count the real cash and enter it below.</p>'+field('Actual cash counted (₱)','cnt','',{num:1})+'<div id="cdiff" class="hint"></div>'},
+  var dr=calc().drawer;
+  form('Count your cash',function(){
+    return '<p class="hint" style="margin-top:0">Count each cash box and enter what is really in it. Leave one blank to skip it.</p>'+
+      BIZ.map(function(b){
+        return '<div class="lbl">'+esc(b[1])+' — records say '+fmt(dr[b[0]])+'</div>'+
+          field('Counted (₱)','c_'+b[0],'',{num:1})+'<div id="d_'+b[0]+'" class="hint"></div>';
+      }).join('');
+  },
   function(d){
-    if(d.cnt===''||d.cnt==null){toast('Enter the counted amount');return false}
-    var diff=r2(num(d.cnt)-exp);if(Math.abs(diff)<0.005){toast('Perfect — it matches!');return true}
-    S.tx.push({id:uid(),ts:now(),type:'adjust_cash',cash:diff,note:diff<0?'Short':'Over'});save();toast('Adjusted by '+sgn(diff));
-  },{label:'Save count',hook:function(){var d=fd(),e=$('#cdiff');if(!e)return;if(d.cnt===''){e.textContent='';return}var df=r2(num(d.cnt)-exp);e.innerHTML=Math.abs(df)<0.005?'Matches your records.':(df<0?'<b class="red">Short by '+fmt(-df)+'</b>':'<b class="green">Over by '+fmt(df)+'</b>')+' — an adjustment will be recorded.'}});
+    var made=0,msg=[];
+    BIZ.forEach(function(b){
+      var v=d['c_'+b[0]];
+      if(v===''||v==null)return;
+      var diff=r2(num(v)-dr[b[0]]);
+      if(Math.abs(diff)<0.005){msg.push(b[1]+' matches');return}
+      S.tx.push({id:uid(),ts:now(),type:'adjust_cash',cash:diff,biz:b[0],note:(diff<0?'Short':'Over')+' — '+b[1]});
+      made++;msg.push(b[1]+' '+sgn(diff));
+    });
+    if(!made&&!msg.length){toast('Enter at least one count');return false}
+    if(made)save();
+    toast(msg.join(', '));
+  },
+  {label:'Save count',hook:function(){
+    var d=fd();
+    BIZ.forEach(function(b){
+      var e=$('#d_'+b[0]);if(!e)return;
+      var v=d['c_'+b[0]];
+      if(v===''||v==null){e.textContent='';return}
+      var df=r2(num(v)-dr[b[0]]);
+      e.innerHTML=Math.abs(df)<0.005?'Matches your records.'
+        :(df<0?'<b class="red">Short by '+fmt(-df)+'</b>':'<b class="green">Over by '+fmt(df)+'</b>')+' — an adjustment will be recorded.';
+    });
+  }});
 }
 
 /* e-wallet */
@@ -971,7 +1019,23 @@ function checkout(){
   if(cart.pay==='utang'&&!cart.sid){toast('Choose whose utang this is');return false}
   var t={id:uid(),ts:now(),type:'sale',lines:cart.lines.map(function(l){var it=l.iid&&item(l.iid);return {iid:l.iid,name:l.name,qty:l.qty,price:l.price,cost:l.cost,biz:(it&&it.biz)||'store'}}),rev:tot,cogs:r2(cart.lines.reduce(function(a,l){return a+l.qty*l.cost},0)),note:(cart.note||'').trim(),
     stk:cart.lines.filter(function(l){var it=l.iid&&item(l.iid);return it&&!it.svc}).map(function(l){return {iid:l.iid,q:-l.qty}})};
-  if(cart.pay==='cash')t.cash=tot;
+  if(cart.pay==='cash'){
+    t.cash=tot;
+    var by={};
+    cart.lines.forEach(function(l){
+      var it=l.iid&&item(l.iid),b=(it&&it.biz)||'store';
+      by[b]=r2((by[b]||0)+l.qty*l.price);
+    });
+    var ks=Object.keys(by);
+    if(ks.length>1){
+      var sum=0;ks.forEach(function(k){sum=r2(sum+by[k])});
+      if(sum!==tot){                                  /* give any stray centavo to the biggest share */
+        var big=ks.reduce(function(a,k){return by[k]>by[a]?k:a},ks[0]);
+        by[big]=r2(by[big]+(tot-sum));
+      }
+      t.cb=by;
+    } else t.biz=ks[0]||'store';
+  }
   else if(cart.pay==='utang'){t.sid=cart.sid;t.debt=tot}
   else{
     var w=cart.wid||(S.wallets[0]&&S.wallets[0].id);
@@ -986,7 +1050,8 @@ function checkout(){
 /* settings + backup */
 function settingsForm(){
   form('Settings',function(){return field('Store name','sname',S.store.name)+
-    '<div class="two">'+field('Starting drawer cash (₱)','open',S.store.openingCash,{num:1})+field('Fee per ₱500 (₱)','fee',S.store.feePer500,{num:1})+'</div>'+
+    '<div class="two">'+BIZ.map(function(b){return field('Starting cash — '+b[1]+' (₱)','op_'+b[0],(S.store.opening||{})[b[0]]||0,{num:1})}).join('')+'</div>'+
+    field('Fee per ₱500 (₱)','fee',S.store.feePer500,{num:1})+
     '<div class="lbl">E-wallets — starting balance</div>'+S.wallets.map(function(w){return '<div class="two">'+field('Name','wn_'+w.id,w.name)+field('Balance (₱)','wo_'+w.id,w.opening,{num:1,neg:1})+'</div>'}).join('')+
     field('Add another wallet (optional)','newwallet','',{ph:'e.g. Maya'})+
     '<div class="note">Your data is saved in this browser on this device only. Back it up regularly so you never lose your records.</div>'+
@@ -1006,7 +1071,11 @@ function settingsForm(){
           : '<button type="button" class="btn btn-sm btn-red" data-act="setpin">Set a PIN</button>')+'</div>'
       : '<div class="note">A PIN needs the app opened over https or from the installed icon.</div>')},
   function(d){
-    S.store.name=(d.sname||'').trim()||'My Sari-sari Store';S.store.openingCash=num(d.open);S.store.feePer500=num(d.fee);
+    S.store.name=(d.sname||'').trim()||'My Sari-sari Store';
+    S.store.opening=S.store.opening||{};
+    BIZ.forEach(function(b){S.store.opening[b[0]]=num(d['op_'+b[0]])});
+    S.store.openingCash=S.store.opening.store;   /* kept so an older copy of the app still reads it */
+    S.store.feePer500=num(d.fee);
     S.wallets.forEach(function(w){var n=(d['wn_'+w.id]||'').trim();if(n)w.name=n;w.opening=num(d['wo_'+w.id])});
     var nw=(d.newwallet||'').trim();if(nw)S.wallets.push({id:uid(),name:nw,opening:0});
     S.setup=true;save();toast('Settings saved');
@@ -1071,6 +1140,11 @@ function helpBody(){return '<div class="help">'+
 
  '<h3>E-wallet</h3>'+
  '<p><b>Cash-in</b>: they give you cash, you send e-money. <b>Cash-out</b>: they send e-money, you give cash. <b>Load / bills</b>: you pay from your wallet, they pay you cash. <b>Move money</b>: shift money between the drawer and a wallet. The fee is suggested from the rate in Settings — change it any time.</p>'+
+
+ '<h3>Two cash boxes</h3>'+
+ '<p>The store and the billiard hall keep separate cash. Set what each one starts with in <b>Settings</b>. A sale pays into the box of whatever was sold, and a cart holding both a softdrink and a game splits between them by what each line cost.</p>'+
+ '<p><b>Count cash</b> asks for both boxes — enter one and leave the other blank if you are only counting one. Restocking is paid by the business that owns the item, and <b>Owner in / out</b> asks which box you touched.</p>'+
+ '<p>Home and Money show the total on top with the two boxes underneath.</p>'+
 
  '<h3>Money</h3>'+
  '<p>Profit, cash in and cash out, and every entry recorded. <b>Count cash</b> at closing: count the real money, type it in, and the app records the difference so the drawer total stays honest. <b>Owner in / out</b> is for your own money going in or coming out — it does not count as profit.</p>'+
@@ -1832,7 +1906,59 @@ function calcEval(e){
   catch(_){return null}
 }
 calcMount();
-syncClock();
+/* ---------- self-check ----------
+   Open the app with #selftest to prove the two drawers add up. It runs on a throwaway
+   state and puts the real one back, so it is safe to run on the shop's phone. */
+function selftest(){
+  var keep=S,out=[],fails=0;
+  function ok(name,got,want){
+    var pass=JSON.stringify(got)===JSON.stringify(want);
+    if(!pass)fails++;
+    out.push((pass?'PASS  ':'FAIL  ')+name+(pass?'':'\n        got  '+JSON.stringify(got)+'\n        want '+JSON.stringify(want)));
+  }
+  S=fresh();
+  S.store.opening={store:100,billiard:50};
+  S.items=[{id:'i1',name:'Soft drink',price:20,cost:15,biz:'store',start:10},
+           {id:'i2',name:'Game',price:30,cost:0,biz:'billiard',svc:true}];
+
+  var c=calcRaw();
+  ok('opening cash splits per drawer',[c.drawer.store,c.drawer.billiard,c.cash],[100,50,150]);
+
+  /* a pure billiard sale must not touch the store drawer */
+  S.tx.push({id:'t1',ts:1,type:'sale',cash:60,biz:'billiard',rev:60,cogs:0,
+             lines:[{iid:'i2',name:'Game',qty:2,price:30,cost:0,biz:'billiard'}]});
+  c=calcRaw();
+  ok('billiard sale pays the billiard drawer',[c.drawer.store,c.drawer.billiard],[100,110]);
+
+  /* a mixed cart splits by what each line sold for */
+  S.tx.push({id:'t2',ts:2,type:'sale',cash:50,cb:{store:20,billiard:30},rev:50,cogs:15,
+             lines:[{iid:'i1',name:'Soft drink',qty:1,price:20,cost:15,biz:'store'},
+                    {iid:'i2',name:'Game',qty:1,price:30,cost:0,biz:'billiard'}]});
+  c=calcRaw();
+  ok('mixed sale splits between both drawers',[c.drawer.store,c.drawer.billiard],[120,140]);
+  ok('total still equals the two drawers',c.cash,r2(c.drawer.store+c.drawer.billiard));
+
+  /* an entry from before there were two drawers belongs to the store */
+  S.tx.push({id:'t3',ts:3,type:'expense',cash:-10,exp:10});
+  c=calcRaw();
+  ok('an entry with no business is the store\'s',[c.drawer.store,c.drawer.billiard],[110,140]);
+
+  /* profit stays split too, and the halves add up to the whole */
+  var r=summ(0,9);
+  ok('profit per business',[r.biz.store.rev,r.biz.billiard.rev],[20,90]);
+  ok('the two nets add up to the total net',r2(r.biz.store.net+r.biz.billiard.net),r.net);
+
+  /* voiding must reverse the right drawer */
+  S.tx[0].void=1;
+  c=calcRaw();
+  ok('voiding a billiard sale only moves that drawer',[c.drawer.store,c.drawer.billiard],[110,80]);
+
+  S=keep;calcCache=null;stamp++;
+  var head=fails?fails+' FAILED':'all '+out.length+' checks passed';
+  document.body.innerHTML='<pre style="padding:1rem;font:13px ui-monospace,Consolas,monospace;white-space:pre-wrap">'+
+    esc(head+'\n\n'+out.join('\n'))+'</pre>';
+  return fails===0;
+}
 
 function boot(){
   return readStore().then(function(raw){
@@ -1842,6 +1968,8 @@ function boot(){
     try{var st=parseState(raw);if(st){S=st;stamp++;return}}catch(e){}
     try{localStorage.setItem(KEY+'.broken',raw)}catch(e){}   /* keep the unreadable copy instead of erasing it */
   }).catch(function(){}).then(function(){
+    window.tindahanSelftest=selftest;          /* also runnable from the console */
+    if(location.hash==='#selftest'){selftest();return}
     if(locked)lockScreen();else{render();syncNow(true)}
   });
 }
