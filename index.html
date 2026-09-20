@@ -192,6 +192,13 @@ input[type=checkbox]{width:auto;min-height:0;accent-color:var(--palm)}
 .lockbox p{color:var(--soft);font-size:.9rem;margin:0 0 1.1rem}
 .lockbox input{width:100%;text-align:center;letter-spacing:.4em;font-size:1.4rem;padding:.7rem;border:2px solid var(--edge);border-radius:12px;background:var(--field);color:var(--ink)}
 .lockmsg{min-height:1.3rem;margin:.6rem 0;font-weight:700;font-size:.9rem;color:var(--tomato)}
+.syncdot{display:inline-block;width:.55rem;height:.55rem;border-radius:50%;background:var(--soft);margin-right:.4rem;vertical-align:middle}
+.syncdot.on{background:var(--leaf)}
+.syncdot.off{background:var(--tomato)}
+.syncdot.busy{background:var(--sun);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:1.5rem;font-weight:900;letter-spacing:.22em;
+  background:var(--field);border:2px dashed var(--edge);border-radius:12px;padding:.6rem;text-align:center;margin:.5rem 0}
 .calcfab{position:fixed;z-index:45;width:52px;height:52px;border-radius:50%;border:2px solid var(--edge);
   background:var(--tomato);color:#fff;font-size:1.3rem;font-weight:900;display:flex;align-items:center;justify-content:center;
   box-shadow:0 6px 18px rgba(0,0,0,.35);cursor:grab;touch-action:none;user-select:none}
@@ -371,6 +378,7 @@ var S=load();
 var stamp=0;   /* bumped on every save; calc() caches against it */
 function save(){
   stamp++;
+  syLater();
   if(crypt){saveEnc();return}
   writeStore(JSON.stringify(S));
 }
@@ -461,8 +469,10 @@ function periodRange(p){
 /* ---------- small UI pieces ---------- */
 function toast(m){var e=$('#toast');e.textContent=m;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(function(){e.classList.remove('on')},2300)}
 function field(label,name,val,o){o=o||{};
-  var attrs=o.num?'type="number" inputmode="decimal" step="any"'+(o.neg?'':' min="0"'):'type="text"';
-  return '<div class="field"><label for="f_'+name+'">'+esc(label)+'</label><input id="f_'+name+'" name="'+name+'" value="'+esc(val==null?'':val)+'" '+attrs+(o.list?' list="'+o.list+'"':'')+(o.ph?' placeholder="'+esc(o.ph)+'"':'')+' autocomplete="off"></div>'}
+  var attrs=o.num?'type="number" inputmode="decimal" step="any"'+(o.neg?'':' min="0"')
+          :o.type?'type="'+o.type+'"'+(o.type==='email'?' inputmode="email" autocapitalize="off" spellcheck="false"':'')
+          :'type="text"';
+  return '<div class="field"><label for="f_'+name+'">'+esc(label)+'</label><input id="f_'+name+'" name="'+name+'" value="'+esc(val==null?'':val)+'" '+attrs+(o.list?' list="'+o.list+'"':'')+(o.ph?' placeholder="'+esc(o.ph)+'"':'')+' autocomplete="'+(o.ac||'off')+'"></div>'}
 function sel(label,name,opts,val){
   return '<div class="field"><label for="f_'+name+'">'+esc(label)+'</label><select id="f_'+name+'" name="'+name+'">'+opts.map(function(o){return '<option value="'+esc(o[0])+'"'+(String(o[0])===String(val)?' selected':'')+'>'+esc(o[1])+'</option>'}).join('')+'</select></div>'}
 function walletOpts(){return S.wallets.map(function(w){return [w.id,w.name]})}
@@ -981,6 +991,13 @@ function settingsForm(){
     field('Add another wallet (optional)','newwallet','',{ph:'e.g. Maya'})+
     '<div class="note">Your data is saved in this browser on this device only. Back it up regularly so you never lose your records.</div>'+
     '<div class="rowbtns" style="margin:.5rem 0 1rem"><button type="button" class="btn btn-sm" data-act="export">Back up data</button><button type="button" class="btn btn-sm" data-act="import">Restore backup</button><button type="button" class="btn btn-sm btn-red" data-act="reset">Erase everything</button></div>'+
+    '<div class="lbl">Syncing between devices</div>'+
+    '<div class="note"><span class="syncdot '+(syOn()?'on':'')+'" id="syncdot"></span>'+
+      (syOn()?'On — '+esc(sy.shop.name)+(sy.last?', last synced '+esc(fdate(sy.last)):'')
+             :'Off. Each device keeps its own separate records.')+'</div>'+
+    '<div class="rowbtns" style="margin:.5rem 0 1rem">'+
+      (syOn()?'<button type="button" class="btn btn-sm btn-green" data-act="syncnow">Sync now</button><button type="button" class="btn btn-sm" data-act="sync">Shop &amp; join code</button>'
+             :'<button type="button" class="btn btn-sm btn-green" data-act="sync">Turn on syncing</button>')+'</div>'+
     '<div class="lbl">PIN lock</div>'+
     (hasCrypto()
       ? '<div class="note">'+(crypt?'This device asks for a PIN before showing your records, and locks itself again after 5 minutes away.':'Anyone who opens this device can read and change your records.')+'</div>'+
@@ -1261,12 +1278,20 @@ var ACT={
   settings:function(){settingsForm()},
   help:function(){helpSheet()},
   setpin:function(){pinForm()},
+  sync:function(){syncForm()},
+  syncnow:function(){closeModal();syncNow()},
+  signup:function(){signUpNow()},
+  newshop:function(){newShopNow()},
+  linkpull:function(){S=fresh();sy.since=null;sy.sent={};sySave();save();finishLink()},
+  linkpush:function(){sy.sent={};sySave();finishLink()},
+  syncout:function(){ask('Stop syncing on this device? The records already here stay, and the shop keeps its copy.','Sign out',function(){
+    sy={email:'',access:'',refresh:'',exp:0,shop:null,since:null,sent:{},gone:{},last:0,err:''};sySave();render();toast('Syncing turned off')})},
   rmpin:function(){removePin()},
   locknow:function(){closeModal();lockNow()},
   dismisssetup:function(){S.setup=true;save();render()},
   additem:function(){itemForm()},
   edititem:function(id){itemForm(id)},
-  delitem:function(id){var it=item(id);if(!it)return;ask('Delete <b>'+esc(it.name)+'</b>? Past sales keep their history.','Delete',function(){S.items=S.items.filter(function(i){return i.id!==id});save();toast('Item deleted')})},
+  delitem:function(id){var it=item(id);if(!it)return;ask('Delete <b>'+esc(it.name)+'</b>? Past sales keep their history.','Delete',function(){S.items=S.items.filter(function(i){return i.id!==id});syGone('item',id);save();toast('Item deleted')})},
   restock:function(id){restockForm(id)},
   adjstock:function(id){adjustForm(id)},
   sample:function(){loadSample()},
@@ -1286,7 +1311,7 @@ var ACT={
   suki:function(id){openSuki(id)},
   addsuki:function(){sukiForm(null)},
   editsuki:function(id){sukiForm(id)},
-  delsuki:function(id){var b=calc().debt[id]||0;if(b>0.005){toast('Settle their '+fmt(b)+' utang first');return}ask('Delete <b>'+esc(sname(id))+'</b>?','Delete',function(){S.suki=S.suki.filter(function(s){return s.id!==id});save();toast('Suki deleted')})},
+  delsuki:function(id){var b=calc().debt[id]||0;if(b>0.005){toast('Settle their '+fmt(b)+' utang first');return}ask('Delete <b>'+esc(sname(id))+'</b>?','Delete',function(){S.suki=S.suki.filter(function(s){return s.id!==id});syGone('suki',id);save();toast('Suki deleted')})},
   collect:function(id){collectForm(id)},
   lend:function(id){lendForm(id)},
   newutang:function(id){closeModal();cart.pay='utang';cart.sid=id;go('sell');toast('Add items, then check out on utang')},
@@ -1394,7 +1419,7 @@ function tryUnlock(pin){
       var st=parseState(TD.decode(pt));
       if(!st)throw 0;
       S=st;crypt={key:key,salt:salt};locked=false;stamp++;
-      document.body.classList.remove('lock');var cf2=$('#calcfab');if(cf2)cf2.hidden=false;render();
+      document.body.classList.remove('lock');var cf2=$('#calcfab');if(cf2)cf2.hidden=false;render();syncNow(true);
     });
   }).catch(function(){
     var e=$('#lockmsg');if(e)e.textContent='Wrong PIN — try again.';
@@ -1461,6 +1486,234 @@ document.addEventListener('submit',function(e){
   e.preventDefault();
   var i=$('#pinin');if(i&&i.value)tryUnlock(i.value);
 });
+
+/* ---------- syncing between the family's devices ----------
+   Every item, suki, wallet, setting and ledger entry is one row keyed by kind+id, so the
+   whole protocol is: push the rows whose contents changed, pull the rows the server has
+   stamped since we last looked. The ledger is append-only and each entry already carries
+   its own id, so two phones selling at once cannot collide. Items and suki are
+   last-write-wins, decided by the server clock rather than any phone's.
+   Talking to PostgREST and GoTrue over plain fetch keeps the offline bundle small —
+   supabase-js would add 40 KB to do the same six requests.
+   ponytail: a full hash of every doc each pass. At a sari-sari store's volume that is
+   microseconds; if the ledger ever reaches six figures, keep a dirty set instead. */
+var SB={url:'https://hpikwbabizycsthpxwqg.supabase.co',key:'sb_publishable_9Z0jw4dUcg8AotA2rYVTdA_t5Y7Txt3'};
+var SKEY=KEY+'.sync';
+var sy={email:'',access:'',refresh:'',exp:0,shop:null,since:null,sent:{},gone:{},last:0,err:''};
+try{var sv=JSON.parse(localStorage.getItem(SKEY)||'null');if(sv)Object.assign(sy,sv)}catch(e){}
+function sySave(){try{localStorage.setItem(SKEY,JSON.stringify(sy))}catch(e){}}
+function syOn(){return !!(sy.refresh&&sy.shop)}
+
+function hash32(str){var h=5381;for(var i=0;i<str.length;i++)h=(h*33^str.charCodeAt(i))>>>0;return h.toString(36)}
+/* The one place that says what a document is. Everything else just walks this list. */
+function localDocs(){
+  var out=[];
+  out.push({kind:'store',id:'store',data:{store:S.store,setup:S.setup,lastBackup:S.lastBackup}});
+  S.wallets.forEach(function(w){out.push({kind:'wallet',id:w.id,data:w})});
+  S.items.forEach(function(i){out.push({kind:'item',id:i.id,data:i})});
+  S.suki.forEach(function(x){out.push({kind:'suki',id:x.id,data:x})});
+  S.tx.forEach(function(t){out.push({kind:'tx',id:t.id,data:t})});
+  return out;
+}
+function applyDoc(kind,id,data){
+  if(data&&data._del){
+    if(kind==='item')S.items=S.items.filter(function(i){return i.id!==id});
+    else if(kind==='suki')S.suki=S.suki.filter(function(x){return x.id!==id});
+    else if(kind==='tx')S.tx=S.tx.filter(function(t){return t.id!==id});
+    return;
+  }
+  if(kind==='store'){S.store=Object.assign(S.store,data.store||{});if(data.setup)S.setup=true;
+    if(data.lastBackup>(S.lastBackup||0))S.lastBackup=data.lastBackup;return}
+  var arr=kind==='item'?S.items:kind==='suki'?S.suki:kind==='wallet'?S.wallets:kind==='tx'?S.tx:null;
+  if(!arr)return;
+  var at=-1;for(var i=0;i<arr.length;i++)if(arr[i].id===id){at=i;break}
+  if(at<0)arr.push(data);else arr[at]=data;
+}
+function syHeaders(json){
+  var h={apikey:SB.key,Authorization:'Bearer '+sy.access};
+  if(json)h['Content-Type']='application/json';
+  return h;
+}
+function syAuth(path,body){
+  return fetch(SB.url+'/auth/v1/'+path,{method:'POST',headers:{apikey:SB.key,'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json().then(function(j){
+      if(!r.ok)throw new Error(j.error_description||j.msg||j.message||('HTTP '+r.status));
+      return j;
+    })});
+}
+function syToken(j){
+  sy.access=j.access_token;sy.refresh=j.refresh_token;
+  sy.exp=Date.now()+((j.expires_in||3600)-60)*1000;
+  if(j.user&&j.user.email)sy.email=j.user.email;
+  sySave();
+}
+function syFresh(){
+  if(sy.access&&Date.now()<sy.exp)return Promise.resolve();
+  if(!sy.refresh)return Promise.reject(new Error('not signed in'));
+  return syAuth('token?grant_type=refresh_token',{refresh_token:sy.refresh}).then(syToken);
+}
+function syRest(path,opts){
+  opts=opts||{};
+  return syFresh().then(function(){
+    return fetch(SB.url+'/rest/v1/'+path,{method:opts.method||'GET',headers:Object.assign(syHeaders(!!opts.body),opts.headers||{}),
+      body:opts.body?JSON.stringify(opts.body):undefined});
+  }).then(function(r){
+    if(r.status===204)return null;
+    return r.text().then(function(t){
+      var j=null;try{j=t?JSON.parse(t):null}catch(e){}
+      if(!r.ok)throw new Error((j&&(j.message||j.hint))||('HTTP '+r.status));
+      return j;
+    });
+  });
+}
+
+var syBusy=false,syQueued=false;
+function syncNow(quiet){
+  if(!syOn()||locked){return Promise.resolve()}
+  if(syBusy){syQueued=true;return Promise.resolve()}
+  if(!navigator.onLine){if(!quiet)toast('No internet — it will sync when you are back online');return Promise.resolve()}
+  syBusy=true;syPaint();
+  return syPull().then(syPush).then(function(){
+    sy.last=Date.now();sy.err='';sySave();
+    if(!quiet)toast('Synced');
+  }).catch(function(e){
+    sy.err=e.message||'Sync failed';sySave();
+    if(!quiet)toast(sy.err);
+  }).then(function(){
+    syBusy=false;syPaint();
+    if(!locked)render();
+    if(syQueued){syQueued=false;setTimeout(function(){syncNow(true)},400)}
+  });
+}
+function syPull(){
+  var q='docs?shop_id=eq.'+sy.shop.id+'&order=updated_at.asc&limit=2000'+
+        (sy.since?'&updated_at=gt.'+encodeURIComponent(sy.since):'');
+  return syRest(q).then(function(rows){
+    if(!rows||!rows.length)return;
+    rows.forEach(function(r){
+      applyDoc(r.kind,r.id,r.data);
+      sy.sent[r.kind+':'+r.id]=hash32(JSON.stringify(r.data));   /* do not echo it straight back */
+      sy.since=r.updated_at;
+    });
+    stamp++;save();
+  });
+}
+function syPush(){
+  var rows=[],docs=localDocs();
+  docs.forEach(function(d){
+    var k=d.kind+':'+d.id,h=hash32(JSON.stringify(d.data));
+    if(sy.sent[k]===h)return;
+    rows.push({shop_id:sy.shop.id,kind:d.kind,id:d.id,data:d.data});
+  });
+  Object.keys(sy.gone).forEach(function(k){
+    var p=k.split(':');
+    rows.push({shop_id:sy.shop.id,kind:p[0],id:p.slice(1).join(':'),data:{_del:1}});
+  });
+  if(!rows.length)return Promise.resolve();
+  return syRest('docs?on_conflict=shop_id,kind,id',{method:'POST',body:rows,
+    headers:{Prefer:'resolution=merge-duplicates,return=minimal'}}).then(function(){
+    docs.forEach(function(d){sy.sent[d.kind+':'+d.id]=hash32(JSON.stringify(d.data))});
+    sy.gone={};sySave();
+  });
+}
+/* A locally deleted row must leave a tombstone, or the next pull resurrects it. */
+function syGone(kind,id){if(syOn()){sy.gone[kind+':'+id]=1;sySave()}}
+
+function syPaint(){
+  var e=$('#syncdot');if(!e)return;
+  e.className='syncdot '+(syBusy?'busy':sy.err?'off':syOn()?'on':'');
+}
+var syTimer=null;
+function syLater(){
+  if(!syOn())return;
+  clearTimeout(syTimer);
+  syTimer=setTimeout(function(){syncNow(true)},2500);   /* let a burst of sales settle first */
+}
+window.addEventListener('online',function(){syncNow(true)});
+setInterval(function(){if(syOn()&&navigator.onLine&&!document.hidden)syncNow(true)},60000);
+
+/* ---------- the screens ---------- */
+function syncForm(){
+  if(!sy.refresh)return signInForm();
+  if(!sy.shop)return shopForm();
+  openModal({title:'Syncing',body:function(){
+    var ago=sy.last?fdate(sy.last):'never';
+    return '<p class="hint" style="margin-top:0">Signed in as <b>'+esc(sy.email)+'</b></p>'+
+      '<div class="kv"><span>Shop</span><b>'+esc(sy.shop.name)+'</b></div>'+
+      '<div class="kv"><span>Last synced</span><b>'+esc(ago)+'</b></div>'+
+      (sy.err?'<div class="warn">'+esc(sy.err)+'</div>':'')+
+      '<div class="lbl" style="margin-top:.8rem">Code for the family to join</div>'+
+      '<div class="code">'+esc(sy.shop.code)+'</div>'+
+      '<div class="hint">Anyone who enters this code on their phone sees and adds to the same records. Only share it with family.</div>'+
+      '<div class="rowbtns" style="margin:.8rem 0 0"><button type="button" class="btn btn-green" data-act="syncnow">Sync now</button>'+
+      '<button type="button" class="btn btn-red" data-act="syncout">Sign out of syncing</button></div>';
+  }});
+}
+function signInForm(){
+  form('Turn on syncing',function(){return '<p class="hint" style="margin-top:0">One account for the family. Every phone and laptop signed in to the same shop shows the same records.</p>'+
+    field('Email','email','',{type:'email',ac:'username'})+field('Password','pw','',{type:'password',ac:'current-password'})+
+    '<div class="hint">New here? Fill these in and press <b>Create account</b>. Already have one? Press <b>Sign in</b>.</div>'+
+    '<div class="rowbtns" style="margin:.7rem 0 0"><button type="button" class="btn btn-green" data-act="signup">Create account</button></div>'},
+  function(d){
+    var em=(d.email||'').trim(),pw=d.pw||'';
+    if(!em||!pw){toast('Enter your email and password');return false}
+    toast('Signing in…');
+    syAuth('token?grant_type=password',{email:em,password:pw}).then(function(j){
+      syToken(j);toast('Signed in');shopForm();
+    }).catch(function(e){toast(e.message==='Invalid login credentials'?'Wrong email or password':e.message)});
+  },{label:'Sign in'});
+}
+function signUpNow(){
+  var d=fd(),em=(d.email||'').trim(),pw=d.pw||'';
+  if(!em||pw.length<6){toast('Enter an email and a password of at least 6 characters');return}
+  toast('Creating your account…');
+  syAuth('signup',{email:em,password:pw}).then(function(j){
+    if(j.access_token){syToken(j);toast('Account created');shopForm();return}
+    closeModal();
+    ask('Check <b>'+esc(em)+'</b> for a confirmation link, tap it, then come back and press Sign in.','Confirm your email',function(){signInForm()});
+  }).catch(function(e){toast(e.message)});
+}
+function shopForm(){
+  form('Your shop',function(){return '<p class="hint" style="margin-top:0">Start a shop if you are the first one, or enter the code from whoever already did.</p>'+
+    field('Join code from the family','code','')+
+    '<div class="hint">No code yet? Press <b>Start a new shop</b> and share the code it gives you.</div>'+
+    '<div class="rowbtns" style="margin:.7rem 0 0"><button type="button" class="btn btn-green" data-act="newshop">Start a new shop</button></div>'},
+  function(d){
+    var c=(d.code||'').trim();
+    if(!c){toast('Enter the code, or start a new shop');return false}
+    toast('Joining…');
+    syRest('rpc/join_shop',{method:'POST',body:{code:c}}).then(function(r){
+      var sh=r&&r[0];if(!sh)throw new Error('No shop with that code');
+      linkShop(sh,true);
+    }).catch(function(e){toast(e.message||'Could not join')});
+  },{label:'Join'});
+}
+function newShopNow(){
+  toast('Creating…');
+  syRest('rpc/create_shop',{method:'POST',body:{shop_name:S.store.name||'My Store'}}).then(function(r){
+    var sh=r&&r[0];if(!sh)throw new Error('Could not create the shop');
+    linkShop(sh,false);
+  }).catch(function(e){toast(e.message||'Could not create the shop')});
+}
+/* Joining a shop that already has records, from a device that also has records, is the one
+   moment sync can double-count. Ask instead of guessing. */
+function linkShop(sh,joined){
+  sy.shop={id:sh.id,name:sh.name,code:sh.join_code};sy.since=null;sy.sent={};sy.gone={};sySave();
+  closeModal();
+  if(!joined||!S.tx.length){finishLink();return}
+  syRest('docs?shop_id=eq.'+sh.id+'&select=kind&limit=1').then(function(rows){
+    if(!rows||!rows.length){finishLink();return}
+    openModal({title:'Two sets of records',body:function(){return '<p class="hint" style="margin-top:0">This device already has '+plural(S.tx.length,'entry').replace('entrys','entries')+', and the shop you joined has its own. Which is the real one?</p>'+
+      '<div class="rowbtns" style="margin:.8rem 0 0;flex-direction:column;align-items:stretch">'+
+      '<button type="button" class="btn btn-red btn-block" data-act="linkpull">Use the shop\'s records — replace what is on this device</button>'+
+      '<button type="button" class="btn btn-block" data-act="linkpush">Send this device\'s records into the shop as well</button></div>'+
+      '<div class="hint" style="margin-top:.6rem">Back up first if you are not sure. Sending both keeps everything, but the same sale recorded twice stays twice.</div>'}});
+  }).catch(function(){finishLink()});
+}
+function finishLink(){
+  closeModal();
+  syncNow().then(function(){toast('Syncing is on')});
+}
 
 /* ---------- floating calculator ----------
    A till needs a calculator more often than it needs any screen in this app, so it rides
@@ -1577,7 +1830,7 @@ function boot(){
     try{var st=parseState(raw);if(st){S=st;stamp++;return}}catch(e){}
     try{localStorage.setItem(KEY+'.broken',raw)}catch(e){}   /* keep the unreadable copy instead of erasing it */
   }).catch(function(){}).then(function(){
-    if(locked)lockScreen();else render();
+    if(locked)lockScreen();else{render();syncNow(true)}
   });
 }
 boot();
