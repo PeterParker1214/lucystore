@@ -37,8 +37,14 @@ the camera cannot open, type the number in the box below the viewfinder instead.
 Each item's barcode is set in *Stock → Edit → Barcode*. Scan an unknown code and the app
 offers to add it as a new item or link it to an existing one.
 
-A USB/Bluetooth barcode gun also works: focus the search box on **Sell** or **Stock** and
-scan — the gun types the number and presses Enter.
+A USB/Bluetooth barcode gun also works, with nothing to click first: open **Sell** or
+**Stock** and scan. Keystrokes arriving faster than 40ms apart are treated as a gun; on
+Sell the item lands in the cart, on Stock it opens Restock for that item.
+
+## Help inside the app
+
+The **?** button in the header opens a walkthrough of every screen, written for someone
+who has never used it. It is also offered on the first-run setup card.
 
 ## Back up
 

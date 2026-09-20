@@ -181,6 +181,11 @@ input[type=checkbox]{width:auto;min-height:0;accent-color:var(--palm)}
 .scanmsg{margin:.6rem 0 .9rem;font-weight:700;color:var(--soft);text-align:center;font-size:.92rem;line-height:1.35}
 .scanmsg.ok{color:var(--palm)}.scanmsg.warn{color:var(--tomato)}
 .scanhits{margin:0 0 .8rem;max-height:96px;overflow:auto}
+.help h3{font-size:1rem;margin:1.1rem 0 .35rem}
+.help h3:first-child{margin-top:0}
+.help p,.help li{margin:.3rem 0;font-size:.95rem;line-height:1.45}
+.help ol,.help ul{margin:.3rem 0;padding-left:1.25rem}
+.help b{font-weight:800}
 .scantorch{position:absolute;right:.5rem;bottom:.5rem;z-index:2;min-height:36px;padding:.3rem .7rem;border:2px solid var(--edge);border-radius:10px;background:var(--panel);color:var(--ink);font-weight:700;font-size:.85rem;cursor:pointer}
 .scantorch[aria-pressed="true"]{background:var(--sun);color:var(--on-sun)}
 .scanhits div{font-size:.82rem;color:var(--soft);font-weight:600;padding:.12rem 0}
@@ -414,7 +419,8 @@ var TITLES={home:'',sell:'Sell',stock:'Inventory',utang:'Utang',wallet:'E-Wallet
 function shell(body){
   return '<div class="shell"><svg class="awning" aria-hidden="true" focusable="false"><defs><pattern id="awn" width="64" height="26" patternUnits="userSpaceOnUse"><path d="M0 0H32V10a16 16 0 0 1-32 0z" fill="var(--tomato)"/><path d="M32 0H64V10a16 16 0 0 1-32 0z" fill="var(--panel)"/><path d="M0 10a16 16 0 0 0 32 0M32 10a16 16 0 0 0 32 0" fill="none" stroke="var(--edge)" stroke-width="2"/></pattern></defs><rect width="100%" height="26" fill="url(#awn)"/></svg>'+
   '<div class="wrap"><div class="top"><div class="brand"><b>'+esc(S.store.name||'My Sari-sari Store')+'</b><span>'+(memOnly?'⚠ Not saving — use Settings › Back up':'Saved on this device')+'</span></div>'+
-  '<button class="btn btn-sm" data-act="settings" aria-label="Settings">'+ic('gear',18)+'<span>Settings</span></button></div>'+
+  '<div class="rowbtns" style="margin:0;flex:none"><button class="btn btn-sm" data-act="help" aria-label="How to use Tindahan">?</button>'+
+  '<button class="btn btn-sm" data-act="settings" aria-label="Settings">'+ic('gear',18)+'<span>Settings</span></button></div></div>'+
   '<main id="main">'+body+'</main></div>'+
   '<nav class="navbar" aria-label="Main menu"><div class="sidebrand">'+ic('store',24)+' Tindahan</div>'+
   NAV.map(function(n){return '<button class="navbtn" data-act="go" data-id="'+n[0]+'"'+(ui.view===n[0]?' aria-current="page"':'')+'>'+ic(n[2],22,ui.view===n[0]?2.6:2)+'<span>'+n[1]+'</span></button>'}).join('')+'</nav></div>';
@@ -441,7 +447,7 @@ function viewHome(c){
   var low=S.items.filter(function(i){return i.reorder>0&&c.stock[i.id]<=i.reorder}).sort(function(a,b){return (c.stock[a.id]/a.reorder)-(c.stock[b.id]/b.reorder)});
   var recent=S.tx.slice().sort(function(a,b){return b.ts-a.ts}).slice(0,5);
   var h='<div class="pagehead"><p>'+new Date().toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric'})+'</p><h1>'+hello+'</h1></div><div class="stack">';
-  if(!S.setup)h+='<div class="card bg-sea"><div class="cardhead"><h2>Set up your store</h2></div><p style="margin:0 0 .7rem">Enter your starting drawer cash and e-wallet balances so every total is correct from day one, then add your items in Stock.</p><div class="rowbtns"><button class="btn btn-blue" data-act="settings">Enter starting balances</button><button class="btn btn-ghost" data-act="dismisssetup">Later</button></div></div>';
+  if(!S.setup)h+='<div class="card bg-sea"><div class="cardhead"><h2>Set up your store</h2></div><p style="margin:0 0 .7rem">Enter your starting drawer cash and e-wallet balances so every total is correct from day one, then add your items in Stock.</p><div class="rowbtns"><button class="btn btn-blue" data-act="settings">Enter starting balances</button><button class="btn" data-act="help">How to use it</button><button class="btn btn-ghost" data-act="dismisssetup">Later</button></div></div>';
   h+='<div class="card hero"><div class="kicker">Cash in drawer</div><div class="bigval" style="font-size:2.8rem;margin-top:.3rem">'+fmt(c.cash)+'</div><div style="font-size:.85rem;margin-top:.4rem;opacity:.85">What the cash box should hold right now, based on your records.</div></div>';
   h+='<div class="grid2"><div class="card"><div class="kicker">Sales today</div><div class="bigval" style="font-size:1.7rem;margin-top:.2rem">'+fmt(td.rev)+'</div><div class="soft" style="font-size:.8rem">'+plural(td.n,'sale')+'</div></div>'+
      '<div class="card bg-palm"><div class="kicker">Profit today</div><div class="bigval" style="font-size:1.7rem;margin-top:.2rem">'+fmt(td.earn)+'</div><div class="soft" style="font-size:.8rem">Sales profit + wallet fees</div></div>'+
@@ -818,6 +824,56 @@ function importForm(){
 var SAMPLE=[['Rice (per kilo)','Groceries','kg',48,55,25,5],['Instant noodles','Groceries','pack',13,16,30,10],['3-in-1 coffee sachet','Drinks','sachet',5.5,7,40,15],['Softdrink (small bottle)','Drinks','bottle',13,16,24,8],['Bottled water 500ml','Drinks','bottle',8,12,24,8],['Eggs','Groceries','pc',8,10,30,12],['Sugar (¼ kilo)','Groceries','pack',14,17,12,4],['Cooking oil sachet','Groceries','sachet',9,12,20,8],['Canned sardines','Groceries','can',20,25,12,5],['Laundry powder sachet','Household','sachet',6,8,30,10],['Bath soap bar','Personal care','pc',22,28,10,4],['Shampoo sachet','Personal care','sachet',4.5,6,40,15],['Candy','Snacks','pc',0.5,1,100,30],['Chips (small pack)','Snacks','pack',7,10,20,6]];
 function loadSample(){SAMPLE.forEach(function(r){S.items.push({id:uid(),name:r[0],cat:r[1],unit:r[2],cost:r[3],price:r[4],start:r[5],reorder:r[6]})});save();toast('Sample items added — edit prices to match yours');render()}
 
+/* ---- how to use ---- */
+function helpBody(){return '<div class="help">'+
+ '<h3>What this app does</h3>'+
+ '<p>It keeps the shop\'s records: what you sold, what is left on the shelf, how much cash should be in the drawer, who owes you utang, and your GCash and MariBank money. Nothing is sent anywhere — it all stays on this phone or laptop.</p>'+
+
+ '<h3>Selling something (the counter)</h3>'+
+ '<ol><li>Open <b>Sell</b>.</li>'+
+ '<li>Tap <b>Scan</b> and point the camera at the barcode. It beeps and drops the item in the cart. Keep scanning — one beep per item.</li>'+
+ '<li>No barcode on it? Tap the item in the list instead, or use <b>Custom</b> for anything not in your stock.</li>'+
+ '<li>Tap <b>Checkout</b>.</li>'+
+ '<li>Type what the customer handed you in <b>Cash received</b> — the app shows the change to give back.</li>'+
+ '<li>Press the red <b>Charge</b> button.</li></ol>'+
+ '<p>Stock goes down and drawer cash goes up by itself. You never type the total.</p>'+
+
+ '<h3>Paying in other ways</h3>'+
+ '<p>On the Checkout sheet, pick <b>Utang</b> to put it on a suki\'s account, or <b>E-wallet</b> if they paid by GCash or MariBank.</p>'+
+
+ '<h3>If the camera will not open</h3>'+
+ '<ul><li>Allow the camera the first time the phone asks.</li>'+
+ '<li>Open Tindahan from the home-screen icon, not from inside Messenger or Facebook — those mini-browsers block the camera.</li>'+
+ '<li>Dark shop? Tap <b>Light</b> on the camera box.</li>'+
+ '<li>Still nothing: type the numbers under the barcode into the box and continue. Scanning itself does not need internet.</li></ul>'+
+
+ '<h3>A barcode it does not know</h3>'+
+ '<p>The app asks whose item it is. Choose <b>Add as a new item</b> and fill in the price, or <b>Link to an item I already have</b>. It only asks once — after that the barcode rings itself up.</p>'+
+
+ '<h3>Stock</h3>'+
+ '<p><b>Restock</b> when new supplies arrive — enter how many you bought and what each one cost. <b>Adjust</b> for anything damaged, expired, given away or miscounted. <b>Edit</b> changes the name, price or barcode.</p>'+
+ '<p>Red <b>Out of stock</b> and yellow <b>Low</b> tags tell you what to buy on your next trip; Home lists them under <b>Needs restocking</b>.</p>'+
+
+ '<h3>Utang</h3>'+
+ '<p>Add each suki once under <b>Utang → Add suki</b>. Tap their name to see the balance, <b>Collect payment</b> when they pay, or <b>Lend cash</b> if you handed them money. Anything owed for 14 days or more is flagged overdue.</p>'+
+
+ '<h3>E-wallet</h3>'+
+ '<p><b>Cash-in</b>: they give you cash, you send e-money. <b>Cash-out</b>: they send e-money, you give cash. <b>Load / bills</b>: you pay from your wallet, they pay you cash. <b>Move money</b>: shift money between the drawer and a wallet. The fee is suggested from the rate in Settings — change it any time.</p>'+
+
+ '<h3>Money</h3>'+
+ '<p>Profit, cash in and cash out, and every entry recorded. <b>Count cash</b> at closing: count the real money, type it in, and the app records the difference so the drawer total stays honest. <b>Owner in / out</b> is for your own money going in or coming out — it does not count as profit.</p>'+
+
+ '<h3>Made a mistake</h3>'+
+ '<p>Find the entry in Money → Ledger or in the suki\'s history and press <b>Void</b>. Everything it touched — cash, stock, utang, wallet — is put back.</p>'+
+
+ '<h3>Do not lose your records</h3>'+
+ '<p>Everything lives on this one device. <b>Settings → Back up data</b> saves a file — do it weekly and keep it somewhere safe. <b>Restore backup</b> brings it back on a new phone. Clearing browser data or deleting the app erases everything.</p>'+
+
+ '<h3>Barcode scanner gun (laptop)</h3>'+
+ '<p>Plug it in, open <b>Sell</b>, and scan — the item goes straight into the cart. It works on the Stock page too, where it opens Restock for that item.</p>'+
+ '</div>'}
+function helpSheet(){openModal({title:'How to use Tindahan',body:helpBody,focus:false})}
+
 /* ---------- actions ---------- */
 /* ---------- barcode scanning ---------- */
 var scan={stream:null,track:null,reader:null,timer:null,busy:false,last:'',lastT:0,mode:null,ac:null,hits:[]};
@@ -843,7 +899,7 @@ function openScanner(o){
       '<div id="scanmsg" class="scanmsg">Starting camera…</div><div id="scanhits" class="scanhits"></div>'+
       field('Or type the barcode','code','',{ph:'e.g. 4800016641107'})},
     submit:function(d){var c=(d.code||'').trim();
-      if(!c&&scan.hits.length){stopScan();return true}   /* already scanned some — just close */
+      if(!c&&scan.hits.length){var done=scan.mode&&scan.mode.done;stopScan();if(done)setTimeout(done,0);return true}
       if(!c){toast('Scan it or type the numbers');return false}
       var fn=scan.mode&&scan.mode.on;stopScan();if(fn)setTimeout(function(){fn(c,false)},0);return true}});
   setTimeout(startScan,80);
@@ -918,12 +974,17 @@ function onCode(code){
   scan.mode.on(code,true);
 }
 function sellScanner(){
-  openScanner({title:'Scan to sell',on:function(code,live){
+  openScanner({title:'Scan to sell',done:function(){if(cart.lines.length)openCart()},on:function(code,live){
     var it=itemByCode(code);
     if(it){
       addCart(it.id);
       var n=cart.lines.reduce(function(a,l){return a+l.qty},0),tot=fmt(cartTotal());
-      if(live){scanMsg('<b>'+esc(it.name)+'</b> · '+fmt(it.price)+'<br>'+plural(n,'item')+' in cart · '+tot,'ok');scanHit(esc(it.name)+' · '+fmt(it.price));return}
+      if(live){
+        scanMsg('<b>'+esc(it.name)+'</b> · '+fmt(it.price)+'<br>'+plural(n,'item')+' in cart · '+tot,'ok');
+        scanHit(esc(it.name)+' · '+fmt(it.price));
+        var b=$('#msub');if(b)b.textContent='Checkout · '+tot;   /* keep scanning, or finish right here */
+        return;
+      }
       toast('Added '+it.name);render();return;
     }
     stopScan();closeModal();unknownCode(code);
@@ -944,14 +1005,37 @@ function linkCodeForm(code){
     it.code=code;save();toast('Linked to '+it.name);
   });
 }
+function gunHit(code,onStock){
+  var it=itemByCode(code);if(!it)return false;
+  if(onStock){restockForm(it.id);return true}
+  addCart(it.id);toast('Added '+it.name);
+  ui.sellQ='';var f=$('#sellSearch');if(f)f.value='';
+  var r=$('#results');if(r)r.innerHTML=productGrid();
+  return true;
+}
 document.addEventListener('keydown',function(e){
   if(e.key!=='Enter')return;
   var t=e.target;if(!t||(t.id!=='sellSearch'&&t.id!=='stockSearch'))return;
   var q=(t.value||'').trim();if(!q)return;
-  var it=itemByCode(q);if(!it)return;
-  e.preventDefault();
-  if(t.id==='sellSearch'){addCart(it.id);toast('Added '+it.name);ui.sellQ='';t.value='';var r=$('#results');if(r)r.innerHTML=productGrid();}
-  else{restockForm(it.id)}
+  if(gunHit(q,t.id==='stockSearch'))e.preventDefault();
+});
+
+/* A USB/Bluetooth scanner gun types the digits and presses Enter faster than any human.
+   ponytail: 40ms between keys is the tell — a real typist is slower. Raise it if a gun is missed. */
+var gun={buf:'',t:0};
+document.addEventListener('keydown',function(e){
+  if(modal||e.ctrlKey||e.altKey||e.metaKey)return;
+  if(ui.view!=='sell'&&ui.view!=='stock')return;
+  var t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'))return;
+  var now=Date.now();
+  if(now-gun.t>40)gun.buf='';
+  gun.t=now;
+  if(e.key==='Enter'){
+    var code=gun.buf;gun.buf='';
+    if(code.length>=6&&gunHit(code,ui.view==='stock'))e.preventDefault();
+    return;
+  }
+  if(e.key.length===1)gun.buf+=e.key;
 });
 
 var ACT={
@@ -966,6 +1050,7 @@ var ACT={
       .catch(function(){toast('This camera has no light to switch on')});
   },
   settings:function(){settingsForm()},
+  help:function(){helpSheet()},
   dismisssetup:function(){S.setup=true;save();render()},
   additem:function(){itemForm()},
   edititem:function(id){itemForm(id)},
