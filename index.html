@@ -348,6 +348,10 @@ function parseState(raw){
     if(!i.buyUnit)i.buyUnit=i.unit;
     if(!(num(i.packQty)>0))i.packQty=1;
     if(i.fractional==null)i.fractional=/^(kg|g|gram|grams|l|liter|litre|ml)$/i.test(i.unit);
+    if(!Array.isArray(i.sellOpts))i.sellOpts=[];
+    i.sellOpts=i.sellOpts.map(function(o,n){
+      o=o||{};return {id:String(o.id||('opt'+(n+1))),label:String(o.label||'').trim(),qty:num(o.qty)||1,price:num(o.price)};
+    }).filter(function(o){return o.label&&o.qty>0&&o.price>0});
   });   /* a backup with no wallets used to crash checkout */
   if(!o.store.opening){o.store.opening={store:+o.store.openingCash||0,billiard:0}}   /* one drawer became two */
   return o;
@@ -418,6 +422,15 @@ function codeText(i){return codesOf(i).join(' ')}
 function itemPic(i,thumb){
   if(i&&i.photo)return '<div class="'+(thumb?'itemthumb':'pic')+'"><img src="'+esc(i.photo)+'" alt=""></div>';
   return '<div class="'+(thumb?'itemthumb':'pic')+'"><span class="ph">▧</span></div>';
+}
+function sellingOptions(i){
+  var a=[{id:'base',label:i.unit||'pc',qty:1,price:num(i.price),base:true}];
+  (i.sellOpts||[]).forEach(function(o){if(o&&o.label&&num(o.qty)>0&&num(o.price)>0)a.push({id:o.id||uid(),label:o.label,qty:num(o.qty),price:num(o.price)})});
+  return a;
+}
+function optionById(i,id){var a=sellingOptions(i);for(var n=0;n<a.length;n++)if(a[n].id===id)return a[n];return a[0]}
+function priceSummary(i){
+  var a=sellingOptions(i);return a.slice(0,3).map(function(o){return fmt(o.price)+'/'+esc(o.label)}).join(' · ');
 }
 function suki(id){return S.suki.find(function(s){return s.id===id})}
 function wallet(id){return S.wallets.find(function(w){return w.id===id})}
@@ -648,7 +661,7 @@ function productGrid(){
   return '<div class="prods">'+list.map(function(i){
     var st=C.stock[i.id],lowc=!i.svc&&i.reorder>0&&st<=i.reorder;
     var sub=i.svc?'Per '+esc(i.unit||'game'):(st<=0?'Out of stock':st+' '+esc(i.unit||'left'));
-    return '<button class="prod'+(lowc?' low':'')+'" data-act="addcart" data-id="'+i.id+'">'+itemPic(i,false)+'<b>'+esc(i.name)+'</b><span class="p">'+fmt(i.price)+' / '+esc(i.unit||'pc')+'</span><small>'+sub+'</small></button>';
+    return '<button class="prod'+(lowc?' low':'')+'" data-act="addcart" data-id="'+i.id+'">'+itemPic(i,false)+'<b>'+esc(i.name)+'</b><span class="p">'+priceSummary(i)+'</span><small>'+sub+'</small></button>';
   }).join('')+'</div>';
 }
 function viewSell(c){
@@ -680,7 +693,7 @@ function stockRows(c){
   return '<div class="list">'+list.map(function(i){
     var st=c.stock[i.id],margin=i.price-i.cost,mp=i.price>0?Math.round(margin/i.price*100):0;
     var stag=i.svc?tag('Service','b'):st<=0?tag('Out of stock','r'):(i.reorder>0&&st<=i.reorder)?tag('Low','s'):tag('OK','g');
-    return '<div class="li" style="align-items:flex-start">'+itemPic(i,true)+'<div class="grow"><div class="t">'+esc(i.name)+' '+stag+'</div><div class="s">'+esc(i.cat||'')+' · Cost '+fmt(i.cost)+'/'+esc(i.unit||'pc')+' · Price '+fmt(i.price)+' · Margin '+fmt(margin)+' ('+mp+'%)</div>'+
+    return '<div class="li" style="align-items:flex-start">'+itemPic(i,true)+'<div class="grow"><div class="t">'+esc(i.name)+' '+stag+'</div><div class="s">'+esc(i.cat||'')+' · Cost '+fmt(i.cost)+'/'+esc(i.unit||'pc')+' · Sell '+priceSummary(i)+' · Base margin '+fmt(margin)+' ('+mp+'%)</div>'+
       '<div class="rowbtns">'+(i.svc?'':'<button class="btn btn-sm btn-green" data-act="restock" data-id="'+i.id+'">Restock</button><button class="btn btn-sm" data-act="adjstock" data-id="'+i.id+'">Adjust</button>')+'<button class="btn btn-sm" data-act="edititem" data-id="'+i.id+'">Edit</button></div></div>'+
       '<div class="amt num" style="font-size:1.25rem">'+(i.svc?'—':(+st.toFixed(2))+'<div class="s" style="font-weight:600">'+esc(i.unit||'pcs')+'</div>')+'</div></div>'}).join('')+'</div>';
 }
@@ -846,6 +859,12 @@ function itemForm(id,draft){
     '<div class="two">'+field('Bought / restocked by','buyUnit',v.buyUnit||v.unit||'pc',{ph:'pack, bag, case, kg'})+field('Sell units in 1 purchase unit','packQty',v.packQty||1,{num:1})+'</div>'+
     '<div class="hint">Tingi example: cigarettes = sold per <b>stick</b>, bought by <b>pack</b>, 20 sticks per pack. Candy = sold per <b>pc</b>, bought by <b>bag</b>, e.g. 100 pcs per bag.</div>'+
     '<div class="two">'+field('Cost per selling unit (₱)','cost',v.cost,{num:1})+field('Selling price per '+esc(v.unit||'unit')+' (₱)','price',v.price,{num:1})+'</div>'+
+    '<div class="lbl">Other ways you sell the same stock</div>'+
+    '<div class="hint">Optional. Example: base unit = stick at ₱10; Pack = 20 sticks for ₱180. Selling a pack deducts 20 sticks from the same inventory.</div>'+
+    '<div class="two">'+field('Option 2 name','opt1label',(v.sellOpts&&v.sellOpts[0]&&v.sellOpts[0].label)||'',{ph:'e.g. pack'})+field('Base units in option 2','opt1qty',(v.sellOpts&&v.sellOpts[0]&&v.sellOpts[0].qty)||'',{num:1})+'</div>'+
+    field('Option 2 selling price (₱)','opt1price',(v.sellOpts&&v.sellOpts[0]&&v.sellOpts[0].price)||'',{num:1})+
+    '<div class="two">'+field('Option 3 name','opt2label',(v.sellOpts&&v.sellOpts[1]&&v.sellOpts[1].label)||'',{ph:'e.g. carton'})+field('Base units in option 3','opt2qty',(v.sellOpts&&v.sellOpts[1]&&v.sellOpts[1].qty)||'',{num:1})+'</div>'+
+    field('Option 3 selling price (₱)','opt2price',(v.sellOpts&&v.sellOpts[1]&&v.sellOpts[1].price)||'',{num:1})+
     sel('Which business?','biz',BIZ,v.biz||'store')+
     '<label class="check"><input type="checkbox" name="fractional" value="1"'+(v.fractional?' checked':'')+'> Allow decimal quantities (for kg, grams, liters, etc.)</label>'+
     '<label class="check"><input type="checkbox" name="svc" value="1"'+(v.svc?' checked':'')+'> This is a service, not a product (no stock to count)</label>'+
@@ -859,7 +878,17 @@ function itemForm(id,draft){
     var codes=String(d.codes||'').split(/[\s,;]+/).map(function(x){return x.trim()}).filter(Boolean).filter(function(x,n,a){return a.indexOf(x)===n});
     for(var k=0;k<codes.length;k++){var clash=itemByCode(codes[k]);if(clash&&(!it||clash.id!==it.id)){toast('Barcode '+codes[k]+' is already on '+clash.name);return false}}
     var pq=num(d.packQty)||1;if(pq<=0)pq=1;
-    var o={name:name,cat:(d.cat||'Other').trim(),unit:(d.unit||'pc').trim(),buyUnit:(d.buyUnit||d.unit||'pc').trim(),packQty:pq,cost:num(d.cost),price:num(d.price),reorder:num(d.reorder),codes:codes,code:codes[0]||'',photo:itemPhotoDraft,fractional:!!d.fractional,svc:!!d.svc,biz:d.biz||'store'};
+    var sellOpts=[];
+    [['opt1label','opt1qty','opt1price','opt1'],['opt2label','opt2qty','opt2price','opt2']].forEach(function(z){
+      var label=(d[z[0]]||'').trim(),q=num(d[z[1]]),p=num(d[z[2]]);
+      if(label||q||p){
+        if(!label||q<=0||p<=0)return;
+        sellOpts.push({id:z[3],label:label,qty:q,price:p});
+      }
+    });
+    if((d.opt1label||d.opt1qty||d.opt1price)&&!sellOpts.find(function(o){return o.id==='opt1'})){toast('Complete all fields for option 2');return false}
+    if((d.opt2label||d.opt2qty||d.opt2price)&&!sellOpts.find(function(o){return o.id==='opt2'})){toast('Complete all fields for option 3');return false}
+    var o={name:name,cat:(d.cat||'Other').trim(),unit:(d.unit||'pc').trim(),buyUnit:(d.buyUnit||d.unit||'pc').trim(),packQty:pq,cost:num(d.cost),price:num(d.price),reorder:num(d.reorder),codes:codes,code:codes[0]||'',photo:itemPhotoDraft,fractional:!!d.fractional,sellOpts:sellOpts,svc:!!d.svc,biz:d.biz||'store'};
     if(it)Object.assign(it,o);else S.items.push(Object.assign({id:uid(),start:num(d.start)},o));
     save();toast(it?'Item updated':'Item added');
   });
@@ -1026,17 +1055,30 @@ function customForm(){
   function(d){var p=num(d.price),q=num(d.qty)||1;if(p<=0){toast('Enter a price');return false}
     cart.lines.push({iid:null,name:(d.name||'').trim()||'Custom item',price:p,cost:num(d.cost),qty:q});toast('Added to cart')},{label:'Add to cart',cls:'btn-red'});
 }
-function addCart(id,qty){
+function addCart(id,qty,optId){
   var it=item(id);if(!it)return;qty=qty==null?1:num(qty);if(qty<=0)return;
-  var l=cart.lines.find(function(x){return x.iid===id});
-  if(l)l.qty=r2(l.qty+qty);else cart.lines.push({iid:id,name:it.name,price:it.price,cost:it.cost,qty:r2(qty),unit:it.unit||'pc',step:it.fractional?.1:1});
+  var op=optionById(it,optId||'base'),key=id+'|'+op.id;
+  var l=cart.lines.find(function(x){return (x.key||x.iid+'|base')===key});
+  if(l)l.qty=r2(l.qty+qty);
+  else cart.lines.push({key:key,iid:id,name:it.name+(op.id==='base'?'':' — '+op.label),baseName:it.name,price:op.price,cost:r2(it.cost*op.qty),qty:r2(qty),unit:op.label,stockFactor:op.qty,step:(op.id==='base'&&it.fractional)?.1:1,optId:op.id});
   renderCartBar();
 }
-function quantityForm(id){
-  var it=item(id);if(!it)return;
-  form('How much — '+it.name,function(){return '<p class="hint" style="margin-top:0">Price: <b>'+fmt(it.price)+' per '+esc(it.unit||'unit')+'</b></p>'+field('Quantity ('+(it.unit||'unit')+')','qty','',{num:1,ph:'e.g. 0.25'})},
-    function(d){var q=num(d.qty);if(q<=0){toast('Enter the quantity');return false}addCart(id,q);toast('Added '+q+' '+(it.unit||'unit'))},
+function quantityForm(id,optId){
+  var it=item(id);if(!it)return;var op=optionById(it,optId||'base');
+  form('How much — '+it.name,function(){return '<p class="hint" style="margin-top:0">Price: <b>'+fmt(op.price)+' per '+esc(op.label)+'</b>'+(op.qty!==1?' · Uses '+op.qty+' '+esc(it.unit||'units')+' each':'')+'</p>'+field('Quantity ('+op.label+')','qty','',{num:1,ph:(op.id==='base'&&it.fractional)?'e.g. 0.25':'e.g. 1'})},
+    function(d){var q=num(d.qty);if(q<=0){toast('Enter the quantity');return false}addCart(id,q,op.id);toast('Added '+q+' '+op.label)},
     {label:'Add to cart',cls:'btn-green'});
+}
+function sellOptionForm(id){
+  var it=item(id);if(!it)return;var ops=sellingOptions(it);
+  if(ops.length===1){if(it.fractional)quantityForm(id,'base');else addCart(id,1,'base');return}
+  openModal({title:'Sell — '+it.name,focus:false,body:function(){
+    return '<p class="hint" style="margin-top:0">Choose how the customer is buying it. All options deduct from the same '+esc(it.unit||'unit')+' stock.</p>'+
+      '<div class="list">'+ops.map(function(o){
+        var sub=o.qty===1?'1 '+esc(it.unit||'unit'):'uses '+o.qty+' '+esc(it.unit||'units');
+        return '<button type="button" class="li" style="width:100%;background:none;border:0;text-align:left;cursor:pointer" data-act="sellopt" data-id="'+it.id+'" data-opt="'+esc(o.id)+'"><div class="grow"><div class="t">'+esc(o.label)+'</div><div class="s">'+sub+'</div></div><div class="amt num">'+fmt(o.price)+'</div></button>';
+      }).join('')+'</div>';
+  }});
 }
 function cartBody(){
   var lines=cart.lines.map(function(l,i){return '<div class="cl"><div class="n"><b>'+esc(l.name)+'</b><small>'+fmt(l.price)+' / '+esc(l.unit||'unit')+'</small></div><div class="qty"><button type="button" class="btn btn-sm" data-act="cminus" data-id="'+i+'" aria-label="Less">−</button><input type="number" inputmode="decimal" step="any" min="0" value="'+l.qty+'" data-q="'+i+'" aria-label="Quantity of '+esc(l.name)+'"><button type="button" class="btn btn-sm" data-act="cplus" data-id="'+i+'" aria-label="More">+</button></div><div class="ct num" id="lt'+i+'">'+fmt(l.price*l.qty)+'</div></div>'}).join('');
@@ -1067,8 +1109,8 @@ function checkout(){
   cart.lines=cart.lines.filter(function(l){return l.qty>0});
   var tot=cartTotal();if(!cart.lines.length||tot<=0){toast('Add something to the cart first');return false}
   if(cart.pay==='utang'&&!cart.sid){toast('Choose whose utang this is');return false}
-  var t={id:uid(),ts:now(),type:'sale',lines:cart.lines.map(function(l){var it=l.iid&&item(l.iid);return {iid:l.iid,name:l.name,qty:l.qty,price:l.price,cost:l.cost,biz:(it&&it.biz)||'store'}}),rev:tot,cogs:r2(cart.lines.reduce(function(a,l){return a+l.qty*l.cost},0)),note:(cart.note||'').trim(),
-    stk:cart.lines.filter(function(l){var it=l.iid&&item(l.iid);return it&&!it.svc}).map(function(l){return {iid:l.iid,q:-l.qty}})};
+  var t={id:uid(),ts:now(),type:'sale',lines:cart.lines.map(function(l){var it=l.iid&&item(l.iid);return {iid:l.iid,name:l.name,qty:l.qty,price:l.price,cost:l.cost,unit:l.unit,stockFactor:l.stockFactor||1,optId:l.optId||'base',biz:(it&&it.biz)||'store'}}),rev:tot,cogs:r2(cart.lines.reduce(function(a,l){return a+l.qty*l.cost},0)),note:(cart.note||'').trim(),
+    stk:cart.lines.filter(function(l){var it=l.iid&&item(l.iid);return it&&!it.svc}).map(function(l){return {iid:l.iid,q:-r2(l.qty*(l.stockFactor||1))}})};
   if(cart.pay==='cash'){
     t.cash=tot;
     var by={};
@@ -1336,7 +1378,10 @@ function sellScanner(){
   openScanner({title:'Scan to sell',done:function(){if(cart.lines.length)openCart()},on:function(code,live){
     var it=itemByCode(code);
     if(it){
-      addCart(it.id);
+      if(sellingOptions(it).length>1){
+        stopScan();closeModal();setTimeout(function(){sellOptionForm(it.id)},0);return;
+      }
+      addCart(it.id,1,'base');
       var n=cart.lines.reduce(function(a,l){return a+l.qty},0),tot=fmt(cartTotal());
       if(live){
         scanMsg('<b>'+esc(it.name)+'</b> · '+fmt(it.price)+'<br>'+plural(n,'item')+' in cart · '+tot,'ok');
@@ -1367,7 +1412,8 @@ function linkCodeForm(code){
 function gunHit(code,onStock){
   var it=itemByCode(code);if(!it)return false;
   if(onStock){restockForm(it.id);return true}
-  addCart(it.id);toast('Added '+it.name);
+  if(sellingOptions(it).length>1){sellOptionForm(it.id);return true}
+  addCart(it.id,1,'base');toast('Added '+it.name);
   ui.sellQ='';var f=$('#sellSearch');if(f)f.value='';
   var r=$('#results');if(r)r.innerHTML=productGrid();
   return true;
@@ -1435,7 +1481,8 @@ var ACT={
   codenew:function(code){closeModal();itemForm(null,{name:'',cat:'Groceries',unit:'pc',buyUnit:'pc',packQty:1,cost:'',price:'',start:'',reorder:5,codes:[code],photo:'',fractional:false})},
   codelink:function(code){closeModal();linkCodeForm(code)},
   stockf:function(id){ui.stockF=id;render()},
-  addcart:function(id){var it=item(id);if(it&&it.fractional)quantityForm(id);else addCart(id)},
+  addcart:function(id){sellOptionForm(id)},
+  sellopt:function(id,b){var opt=b.dataset.opt||'base',it=item(id);closeModal();if(!it)return;if(opt==='base'&&it.fractional)quantityForm(id,opt);else addCart(id,1,opt)},
   custom:function(){customForm()},
   cartopen:function(){openCart()},
   cplus:function(i){var l=cart.lines[+i];l.qty=r2(l.qty+(l.step||1));drawModal();patchCart()},
