@@ -370,6 +370,11 @@ function parseState(raw){
   if(!o.store.opening){o.store.opening={store:+o.store.openingCash||0,billiard:0}}   /* one drawer became two */
   if(!o.store.billiards||typeof o.store.billiards!=='object')o.store.billiards={rate:0,sessions:[]};
   if(!Array.isArray(o.store.billiards.sessions))o.store.billiards.sessions=[];
+  o.items.forEach(function(i){
+    if(i&&i.svc&&i.biz==='billiard'&&String(i.unit||'').toLowerCase()==='hour'){
+      i.unit='game';i.buyUnit='game';i.fractional=false;
+    }
+  });
   return o;
 }
 var crypt=null,locked=false;
@@ -699,44 +704,43 @@ function renderCartBar(){
 function billiardState(){if(!S.store.billiards)S.store.billiards={rate:0,sessions:[]};if(!Array.isArray(S.store.billiards.sessions))S.store.billiards.sessions=[];return S.store.billiards}
 function billiardServices(){return S.items.filter(function(i){return i.svc&&i.biz==='billiard'}).sort(function(a,b){return a.name.localeCompare(b.name)})}
 function billiardDefaultRate(){var bs=billiardState(),sv=billiardServices();return num(bs.rate)>0?num(bs.rate):(sv.length?num(sv[0].price):0)}
-function durationHours(start,end){return Math.max(1/60,(end-start)/3600000)}
 function durationText(start,end){var m=Math.max(1,Math.round((end-start)/60000)),h=Math.floor(m/60),r=m%60;return h?(h+'h '+(r?r+'m':'')):m+'m'}
 function viewBilliards(c){
   var bs=billiardState(),sessions=bs.sessions.slice().sort(function(a,b){return a.start-b.start}),sv=billiardServices();
   var day=startOfDay(now()),recent=S.tx.filter(function(t){if(t.void||t.type!=='sale')return false;return (t.lines||[]).some(function(l){return l.biz==='billiard'})||t.biz==='billiard'}).sort(function(a,b){return b.ts-a.ts});
   var sales=recent.filter(function(t){return t.ts>=day}).reduce(function(a,t){return a+(t.rev||0)},0);
-  var h=head('Billiards','Start a game, let Lucy time it, then charge when they finish.')+
+  var h=head('Billiards','Each finished game has one fixed price. Time is shown only for reference.')+
     '<div class="grid2"><div class="card bg-sea"><div class="kicker">Games playing now</div><div class="bigval" style="font-size:2rem;margin-top:.2rem">'+sessions.length+'</div></div>'+
     '<div class="card bg-palm"><div class="kicker">Earned today</div><div class="bigval num" style="font-size:1.7rem;margin-top:.2rem">'+fmt(sales)+'</div></div></div>'+
-    '<div class="actions" style="margin-top:.75rem"><button class="btn btn-green" data-act="billstart">'+ic('plus',18)+'Start session</button><button class="btn" data-act="billservice">'+ic('gear',18)+'Rate settings</button></div>';
+    '<div class="actions" style="margin-top:.75rem"><button class="btn btn-green" data-act="billstart">'+ic('plus',18)+'Start game</button><button class="btn" data-act="billservice">'+ic('gear',18)+'Rate settings</button></div>';
   h+='<div class="card" style="margin-top:.75rem"><div class="cardhead"><h2>Playing now</h2></div>';
-  if(sessions.length)h+='<div class="list">'+sessions.map(function(s){return '<div class="li"><div class="grow"><div class="t">'+esc(s.label||'Billiard session')+'</div><div class="s">Started '+esc(fdate(s.start))+' · '+durationText(s.start,now())+' · '+fmt(s.rate)+'/hour</div></div><button class="btn btn-sm btn-red" data-act="billend" data-id="'+s.id+'">End &amp; charge</button></div>'}).join('')+'</div>';
+  if(sessions.length)h+='<div class="list">'+sessions.map(function(s){return '<div class="li"><div class="grow"><div class="t">'+esc(s.label||'Billiard session')+'</div><div class="s">Started '+esc(fdate(s.start))+' · '+durationText(s.start,now())+' · '+fmt(s.rate)+' per game</div></div><button class="btn btn-sm btn-red" data-act="billend" data-id="'+s.id+'">Finish &amp; charge</button></div>'}).join('')+'</div>';
   else h+=empty('No active games','Tap Start session when someone begins playing.');
   h+='</div><div class="card" style="margin-top:.75rem"><div class="cardhead"><h2>Your rate</h2></div>';
   if(sv.length)h+='<div class="list">'+sv.map(function(i){return '<div class="li"><div class="grow"><div class="t">'+esc(i.name)+'</div><div class="s">'+fmt(i.price)+' per '+esc(i.unit||'game')+'</div></div><button class="btn btn-sm" data-act="edititem" data-id="'+i.id+'">Edit</button></div>'}).join('')+'</div>';
-  else h+=empty('No billiard service yet','Start a session and enter the hourly rate, or create a reusable rate/service here.');
+  else h+=empty('No billiard service yet','Start a game and enter the price per game, or save your usual game price here.');
   h+='</div><div class="card" style="margin-top:.75rem"><div class="cardhead"><h2>Recent billiard activity</h2></div>'+(recent.length?'<div class="list">'+recent.slice(0,8).map(function(t){return txRow(t)}).join('')+'</div>':empty('Nothing yet','Finished billiard sessions will appear here.'))+'</div>';
   return h;
 }
 function billiardStartForm(){
   var bs=billiardState(),rate=billiardDefaultRate();
-  form('Start billiard session',function(){return field('Table / customer label','label','',{ph:'e.g. Table 1 — Jun'})+field('Rate per hour (₱)','rate',rate||'',{num:1})+'<div class="hint">The timer starts when you press Start and stays saved even if Lucy Store is closed.</div>'},
-  function(d){var rate=num(d.rate);if(rate<=0){toast('Enter the hourly rate');return false}bs.rate=rate;bs.sessions.push({id:uid(),label:(d.label||'').trim()||'Billiard session',rate:rate,start:now()});save();toast('Billiard timer started')},{label:'Start'});
+  form('Start billiard game',function(){return field('Table / customer label','label','',{ph:'e.g. Table 1 — Jun'})+field('Price per game (₱)','rate',rate||'',{num:1})+'<div class="hint">One game = one fixed charge. The timer is only there so you can see how long they have been playing.</div>'},
+  function(d){var rate=num(d.rate);if(rate<=0){toast('Enter the price per game');return false}bs.rate=rate;bs.sessions.push({id:uid(),label:(d.label||'').trim()||'Billiard game',rate:rate,start:now()});save();toast('Billiard game started')},{label:'Start game'});
 }
 function billiardChargeForm(id){
   var bs=billiardState(),s=bs.sessions.find(function(x){return x.id===id});if(!s)return;
-  var end=now(),hrs=durationHours(s.start,end),amount=r2(hrs*s.rate);
-  form('End — '+s.label,function(){return '<div class="note"><b>'+esc(durationText(s.start,end))+'</b> at '+fmt(s.rate)+'/hour = <b>'+fmt(amount)+'</b></div>'+sel('Payment','pay',[['cash','Cash'],['wallet','E-wallet'],['utang','Utang']],'cash')+(S.wallets.length?sel('E-wallet (if used)','wid',walletOpts(),S.wallets[0].id):'')+(S.suki.length?sel('Suki (if utang)','sid',[['','Choose…']].concat(S.suki.map(function(x){return [x.id,x.name]})),''):'')+field('Note (optional)','note','')},
+  var end=now(),amount=r2(s.rate);
+  form('Finish — '+s.label,function(){return '<div class="note">Played for <b>'+esc(durationText(s.start,end))+'</b> · Game charge: <b>'+fmt(amount)+'</b></div>'+sel('Payment','pay',[['cash','Cash'],['wallet','E-wallet'],['utang','Utang']],'cash')+(S.wallets.length?sel('E-wallet (if used)','wid',walletOpts(),S.wallets[0].id):'')+(S.suki.length?sel('Suki (if utang)','sid',[['','Choose…']].concat(S.suki.map(function(x){return [x.id,x.name]})),''):'')+field('Note (optional)','note','')},
   function(d){
     if(d.pay==='utang'&&!d.sid){toast('Choose whose utang this is');return false}
-    var t={id:uid(),ts:end,type:'sale',lines:[{iid:null,name:s.label,qty:+hrs.toFixed(2),price:s.rate,cost:0,unit:'hour',biz:'billiard'}],rev:amount,cogs:0,note:(d.note||'').trim(),biz:'billiard'};
+    var t={id:uid(),ts:end,type:'sale',lines:[{iid:null,name:s.label,qty:1,price:s.rate,cost:0,unit:'game',biz:'billiard'}],rev:amount,cogs:0,note:(d.note||'').trim(),biz:'billiard'};
     if(d.pay==='cash')t.cash=amount;else if(d.pay==='wallet'){if(!d.wid){toast('Choose an e-wallet');return false}t.wid=d.wid;t.wal=amount}else{t.sid=d.sid;t.debt=amount}
-    S.tx.push(t);bs.sessions=bs.sessions.filter(function(x){return x.id!==id});save();toast('Billiard session charged — '+fmt(amount));
+    S.tx.push(t);bs.sessions=bs.sessions.filter(function(x){return x.id!==id});save();toast('Billiard game charged — '+fmt(amount));
   },{label:'Charge '+fmt(amount),cls:'btn-red'});
 }
 function billiardServiceForm(){
   var sv=billiardServices();if(sv.length){itemForm(sv[0].id);return}
-  itemForm(null,{name:'Billiard game',cat:'Other',unit:'hour',buyUnit:'hour',packQty:1,cost:0,price:billiardDefaultRate()||'',start:0,reorder:0,codes:[],photo:'',fractional:true,svc:true,biz:'billiard',sellOpts:[]});
+  itemForm(null,{name:'Billiard game',cat:'Other',unit:'game',buyUnit:'game',packQty:1,cost:0,price:billiardDefaultRate()||'',start:0,reorder:0,codes:[],photo:'',fractional:false,svc:true,biz:'billiard',sellOpts:[]});
 }
 
 /* Stock */
