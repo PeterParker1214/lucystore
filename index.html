@@ -881,8 +881,9 @@ function drawModal(focusFirst){
   var el=$('#modal');
   if(!modal){el.innerHTML='';document.body.classList.remove('lock');renderCartBar();return}
   var lab=typeof modal.label==='function'?modal.label():(modal.label||'Save');
+  var cancelAct=modal.cancelAct||'closem',cancelLabel=modal.cancelLabel||'Cancel';
   el.innerHTML='<div class="overlay" data-act="ovl"><div class="sheet" role="dialog" aria-modal="true" aria-label="'+esc(modal.title)+'"><div class="shead"><h2>'+esc(modal.title)+'</h2><button type="button" class="btn btn-ghost btn-sm" data-act="closem" aria-label="Close">'+ic('x',20)+'</button></div><form id="mform" novalidate>'+modal.body()+
-    (modal.submit?'<div class="mfoot"><button type="button" class="btn" data-act="closem">Cancel</button><button id="msub" class="btn '+(modal.cls||'btn-green')+'" type="submit">'+esc(lab)+'</button></div>':'')+'</form></div></div>';
+    (modal.submit?'<div class="mfoot"><button type="button" class="btn" data-act="'+esc(cancelAct)+'">'+esc(cancelLabel)+'</button><button id="msub" class="btn '+(modal.cls||'btn-green')+'" type="submit">'+esc(lab)+'</button></div>':'')+'</form></div></div>';
   document.body.classList.add('lock');
   var cf=$('#calcfab'),cp=$('#calcpanel');if(cf)cf.hidden=true;if(cp){cp.hidden=true;calc9.open=false}renderCartBar();
   if(focusFirst&&modal.focus!==false)setTimeout(function(){var f=$('#mform input:not([type=hidden]):not([type=checkbox]),#mform select');if(f)f.focus()},40);
@@ -1150,7 +1151,7 @@ function patchCart(){
 }
 function openCart(){
   if(!cart.wid&&S.wallets[0])cart.wid=S.wallets[0].id;
-  openModal({title:'Checkout',body:cartBody,label:function(){return 'Charge '+fmt(cartTotal())},cls:'btn-red',focus:false,submit:checkout});
+  openModal({title:'Checkout',body:cartBody,label:function(){return 'Charge '+fmt(cartTotal())},cls:'btn-red',focus:false,submit:checkout,cancelAct:'cancelcart',cancelLabel:'Cancel transaction'});
   patchCart();
 }
 function checkout(){
@@ -1597,6 +1598,10 @@ var ACT={
   sellopt:function(id,b){var opt=b.dataset.opt||'base',it=item(id);closeModal();if(!it)return;if(opt==='base'&&it.fractional)quantityForm(id,opt);else addCart(id,1,opt)},
   custom:function(){customForm()},
   cartopen:function(){openCart()},
+  cancelcart:function(){
+    cart={lines:[],pay:'cash',sid:'',wid:'',given:'',note:''};
+    closeModal();render();toast('Transaction canceled');
+  },
   cplus:function(i){var l=cart.lines[+i];l.qty=r2(l.qty+(l.step||1));drawModal();patchCart()},
   cminus:function(i){var l=cart.lines[+i];l.qty=r2(l.qty-(l.step||1));if(l.qty<=0)cart.lines.splice(+i,1);if(!cart.lines.length){closeModal();return}drawModal();patchCart()},
   cpay:function(id){cart.pay=id;drawModal();patchCart()},
