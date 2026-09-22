@@ -1,5 +1,5 @@
 /* Offline cache. Bump V whenever index.html or vendor/ changes. */
-var V = 'lucystore-v14';
+var V = 'lucystore-v15';
 var ASSETS = [
   './',
   './index.html',
