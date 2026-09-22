@@ -157,7 +157,7 @@ input[type=checkbox]{width:auto;min-height:0;accent-color:var(--palm)}
 /* Product grid */
 .prods{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;margin-top:.6rem}
 @media(min-width:520px){.prods{grid-template-columns:repeat(3,1fr)}}
-.prod{display:flex;flex-direction:column;align-items:flex-start;gap:.15rem;text-align:left;min-height:84px;padding:.6rem .7rem;background:var(--panel);border:2px solid var(--edge);border-radius:14px;box-shadow:0 3px 0 var(--shadow);cursor:pointer}
+.prod{display:flex;flex-direction:column;align-items:flex-start;gap:.15rem;text-align:left;min-height:84px;padding:.6rem .7rem;background:var(--panel);border:2px solid var(--edge);border-radius:14px;box-shadow:0 3px 0 var(--shadow);cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-select:none}
 .prod:active{transform:translateY(2px);box-shadow:0 1px 0 var(--shadow)}
 .prod b{font-size:.92rem;line-height:1.15;overflow-wrap:anywhere}
 .prod .p{font-weight:800;color:var(--palm);font-variant-numeric:tabular-nums}
@@ -1330,7 +1330,7 @@ function photoStatus(msg,cls){var e=$('#photostatus');if(e){e.className='hint'+(
 function dataUrlFromImage(im){var max=420,scale=Math.min(max/im.width,max/im.height,1),w=Math.max(1,Math.round(im.width*scale)),h=Math.max(1,Math.round(im.height*scale)),cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(im,0,0,w,h);return cv.toDataURL('image/jpeg',.8)}
 function removePhotoBackground(src){
   return new Promise(function(resolve,reject){var im=new Image();im.onload=function(){
-    var max=420,scale=Math.min(max/im.width,max/im.height,1),w=Math.max(1,Math.round(im.width*scale)),h=Math.max(1,Math.round(im.height*scale)),cv=document.createElement('canvas'),x;
+    var max=320,scale=Math.min(max/im.width,max/im.height,1),w=Math.max(1,Math.round(im.width*scale)),h=Math.max(1,Math.round(im.height*scale)),cv=document.createElement('canvas'),x;
     cv.width=w;cv.height=h;x=cv.getContext('2d');x.drawImage(im,0,0,w,h);var d=x.getImageData(0,0,w,h),p=d.data;
     function rgb(xx,yy){var z=(yy*w+xx)*4;return [p[z],p[z+1],p[z+2]]}var cs=[rgb(0,0),rgb(w-1,0),rgb(0,h-1),rgb(w-1,h-1)],bg=[0,0,0];
     cs.forEach(function(q){bg[0]+=q[0];bg[1]+=q[1];bg[2]+=q[2]});bg=bg.map(function(v){return v/4});
@@ -1338,7 +1338,7 @@ function removePhotoBackground(src){
     var seen=new Uint8Array(w*h),q=[],head=0;function push(xx,yy){var n=yy*w+xx;if(seen[n])return;var z=n*4;if(dist(z)>62)return;seen[n]=1;q.push(n)}
     for(var xx=0;xx<w;xx++){push(xx,0);push(xx,h-1)}for(var yy=0;yy<h;yy++){push(0,yy);push(w-1,yy)}
     while(head<q.length){var n=q[head++],yy=Math.floor(n/w),xx=n-yy*w,z=n*4,dd=dist(z);p[z+3]=dd<40?0:Math.max(0,Math.min(255,Math.round((dd-40)/22*255)));if(xx>0)push(xx-1,yy);if(xx+1<w)push(xx+1,yy);if(yy>0)push(xx,yy-1);if(yy+1<h)push(xx,yy+1)}
-    x.putImageData(d,0,0);resolve(cv.toDataURL('image/png'));
+    x.putImageData(d,0,0);var out=cv.toDataURL('image/webp',.82);resolve(out.indexOf('data:image/webp')===0?out:cv.toDataURL('image/png'));
   };im.onerror=reject;im.src=src});
 }
 function setPhotoPreview(src){itemPhotoDraft=src||'';var p=$('#itemphotoprev');if(p)p.outerHTML=src?'<img id="itemphotoprev" class="photoprev" src="'+esc(src)+'" alt="Product photo">':'<div id="itemphotoprev" class="photoph">No photo yet</div>'}
@@ -1356,13 +1356,29 @@ function lookupProductCode(code){
     photoStatus('Barcode found and added. No reliable product listing was found, so check the remaining fields.');return false;
   }).catch(function(){photoStatus('Barcode found, but product lookup is unavailable right now.');return false});
 }
+function photoCodeZXing(im){
+  var ready=window.ZXing?Promise.resolve():loadScript('vendor/zxing.min.js').catch(function(){return loadScript('https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js')});
+  return ready.then(function(){
+    if(!window.ZXing||!window.ZXing.BrowserMultiFormatReader)throw 0;
+    var rd=new window.ZXing.BrowserMultiFormatReader(),p;
+    try{
+      if(rd.decodeFromImageElement)p=rd.decodeFromImageElement(im);
+      else if(rd.decodeFromImage)p=rd.decodeFromImage(undefined,im.src);
+      else throw 0;
+    }catch(e){return Promise.reject(e)}
+    return Promise.resolve(p).then(function(res){try{if(rd.reset)rd.reset()}catch(e){};return res?(res.getText?res.getText():res.text):''});
+  });
+}
 function smartPhotoFill(){
   if(!itemPhotoOriginalDraft&&!itemPhotoDraft){toast('Take a product photo first');return}
   var src=itemPhotoOriginalDraft||itemPhotoDraft;photoStatus('Checking the photo for a barcode…');var im=new Image();
-  im.onload=function(){if(!('BarcodeDetector' in window)){photoStatus('This browser cannot read a barcode directly from a photo. Use Scan barcode instead.');return}
-    detectorFormats().then(function(fs){var det;try{det=new BarcodeDetector({formats:(fs&&fs.length)?fs:undefined})}catch(e){photoStatus('Photo barcode detection is not available here.');return}
-      det.detect(im).then(function(r){if(r&&r[0]&&r[0].rawValue)lookupProductCode(String(r[0].rawValue));else photoStatus('No readable barcode found in the photo. Show the barcode clearly or use Scan barcode.')}).catch(function(){photoStatus('I could not read a barcode from this photo. Use Scan barcode if needed.')});
-    });
+  im.onload=function(){
+    function fallback(){photoCodeZXing(im).then(function(code){if(code)lookupProductCode(String(code));else photoStatus('No readable barcode found in the photo. Show the barcode clearly or use Scan barcode.')}).catch(function(){photoStatus('No readable barcode found in the photo. Show the barcode clearly or use Scan barcode.')})}
+    if(!('BarcodeDetector' in window)){fallback();return}
+    detectorFormats().then(function(fs){
+      var det;try{det=new BarcodeDetector({formats:(fs&&fs.length)?fs:undefined})}catch(e){fallback();return}
+      det.detect(im).then(function(r){if(r&&r[0]&&r[0].rawValue)lookupProductCode(String(r[0].rawValue));else fallback()}).catch(fallback);
+    }).catch(fallback);
   };im.onerror=function(){photoStatus('Could not analyze this photo.')};im.src=src;
 }
 
