@@ -907,7 +907,7 @@ function itemForm(id,draft){
   form(it?'Edit item':'Add item',function(){
     var pp=itemPhotoDraft?'<img id="itemphotoprev" class="photoprev" src="'+esc(itemPhotoDraft)+'" alt="Product photo">':'<div id="itemphotoprev" class="photoph">No photo yet</div>';
     return field('Item name','name',v.name,{ph:'e.g. Piattos Cheese 85g'})+
-    '<div class="field"><label>Product photo</label><div class="photobox">'+pp+'<div class="grow"><input id="itemphoto" type="file" accept="image/*" capture="environment"><div class="hint" id="photostatus">Take or choose a clear photo. Lucy will clean the background and, when a barcode is visible, try to fill product details automatically.</div>'+(itemPhotoDraft?'<div class="rowbtns"><button type="button" class="btn btn-sm" data-act="bgclean">Remove background</button><button type="button" class="btn btn-sm" data-act="photooriginal">Use original</button><button type="button" class="btn btn-sm" data-act="smartphoto">Smart fill</button><button type="button" class="btn btn-sm" data-act="clearphoto">Remove photo</button></div>':'')+'</div></div></div>'+
+    '<div class="field"><label>Product photo</label><div class="photobox">'+pp+'<div class="grow"><input id="itemphoto" type="file" accept="image/*" capture="environment"><div class="hint" id="photostatus">Take or choose a clear front-facing photo. Lucy reads visible package text, checks any barcode it finds, and then removes the background with AI.</div>'+(itemPhotoDraft?'<div class="rowbtns"><button type="button" class="btn btn-sm" data-act="bgclean">Remove background</button><button type="button" class="btn btn-sm" data-act="photooriginal">Use original</button><button type="button" class="btn btn-sm" data-act="smartphoto">Smart Fill</button><button type="button" class="btn btn-sm" data-act="clearphoto">Remove photo</button></div>':'')+'</div></div></div>'+
     '<div class="field"><label for="f_codes">Accepted barcodes (optional)</label><div style="display:flex;gap:.5rem"><input id="f_codes" name="codes" type="text" inputmode="numeric" value="'+esc(codes)+'" placeholder="Scan one, or separate several with commas" autocomplete="off" style="flex:1"><button type="button" class="btn" data-act="scanitem" data-id="'+(id||'')+'">'+ic('scan',18)+'Scan</button></div><div class="hint">No barcode is fine. Multiple barcodes can point to this same product.</div></div>'+
     '<div class="two">'+field('Category','cat',v.cat,{list:'cats'})+field('Sold per','unit',v.unit,{ph:'pc, stick, sachet, kg'})+'</div>'+
     '<div class="two">'+field('Bought / restocked by','buyUnit',v.buyUnit||v.unit||'pc',{ph:'pack, bag, case, kg'})+field('Sell units in 1 purchase unit','packQty',v.packQty||1,{num:1})+'</div>'+
@@ -1344,33 +1344,131 @@ function helpSheet(){openModal({title:'How to use Lucy Store',body:helpBody,focu
 /* ---------- smart product photo ---------- */
 function photoStatus(msg,cls){var e=$('#photostatus');if(e){e.className='hint'+(cls?' '+cls:'');e.textContent=msg}}
 function dataUrlFromImage(im){var max=420,scale=Math.min(max/im.width,max/im.height,1),w=Math.max(1,Math.round(im.width*scale)),h=Math.max(1,Math.round(im.height*scale)),cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(im,0,0,w,h);return cv.toDataURL('image/jpeg',.8)}
+
+var bgModulePromise=null,ocrPromise=null;
+function loadBgModule(){
+  if(bgModulePromise)return bgModulePromise;
+  bgModulePromise=import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.6/+esm');
+  return bgModulePromise;
+}
+function blobToDataURL(blob){
+  return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(String(r.result||''))};r.onerror=rej;r.readAsDataURL(blob)});
+}
 function removePhotoBackground(src){
-  return new Promise(function(resolve,reject){var im=new Image();im.onload=function(){
-    var max=320,scale=Math.min(max/im.width,max/im.height,1),w=Math.max(1,Math.round(im.width*scale)),h=Math.max(1,Math.round(im.height*scale)),cv=document.createElement('canvas'),x;
-    cv.width=w;cv.height=h;x=cv.getContext('2d');x.drawImage(im,0,0,w,h);var d=x.getImageData(0,0,w,h),p=d.data;
-    function rgb(xx,yy){var z=(yy*w+xx)*4;return [p[z],p[z+1],p[z+2]]}var cs=[rgb(0,0),rgb(w-1,0),rgb(0,h-1),rgb(w-1,h-1)],bg=[0,0,0];
-    cs.forEach(function(q){bg[0]+=q[0];bg[1]+=q[1];bg[2]+=q[2]});bg=bg.map(function(v){return v/4});
-    function dist(z){var a=p[z]-bg[0],b=p[z+1]-bg[1],cc=p[z+2]-bg[2];return Math.sqrt(a*a+b*b+cc*cc)}
-    var seen=new Uint8Array(w*h),q=[],head=0;function push(xx,yy){var n=yy*w+xx;if(seen[n])return;var z=n*4;if(dist(z)>62)return;seen[n]=1;q.push(n)}
-    for(var xx=0;xx<w;xx++){push(xx,0);push(xx,h-1)}for(var yy=0;yy<h;yy++){push(0,yy);push(w-1,yy)}
-    while(head<q.length){var n=q[head++],yy=Math.floor(n/w),xx=n-yy*w,z=n*4,dd=dist(z);p[z+3]=dd<40?0:Math.max(0,Math.min(255,Math.round((dd-40)/22*255)));if(xx>0)push(xx-1,yy);if(xx+1<w)push(xx+1,yy);if(yy>0)push(xx,yy-1);if(yy+1<h)push(xx,yy+1)}
-    x.putImageData(d,0,0);var out=cv.toDataURL('image/webp',.82);resolve(out.indexOf('data:image/webp')===0?out:cv.toDataURL('image/png'));
-  };im.onerror=reject;im.src=src});
+  photoStatus('Loading AI background remover…');
+  return loadBgModule().then(function(m){
+    var fn=m.removeBackground||m.default;if(!fn)throw new Error('Background remover unavailable');
+    return fn(src,{
+      device:'cpu',
+      proxyToWorker:true,
+      model:'isnet_fp16',
+      output:{format:'image/webp',quality:.86,type:'foreground'},
+      progress:function(key,current,total){
+        if(total>0&&/model|onnx|wasm|resource/i.test(String(key||''))){
+          photoStatus('Preparing AI background removal… '+Math.min(99,Math.round(current/total*100))+'%');
+        }
+      }
+    });
+  }).then(blobToDataURL);
 }
-function setPhotoPreview(src){itemPhotoDraft=src||'';var p=$('#itemphotoprev');if(p)p.outerHTML=src?'<img id="itemphotoprev" class="photoprev" src="'+esc(src)+'" alt="Product photo">':'<div id="itemphotoprev" class="photoph">No photo yet</div>'}
-function categoryFromFoodFacts(p){var s=((p.categories||'')+' '+((p.categories_tags||[]).join(' '))).toLowerCase();if(/beverage|drink|soda|water|juice|coffee|tea/.test(s))return 'Drinks';if(/snack|chip|candy|confection|chocolate|biscuit|cracker/.test(s))return 'Snacks';if(/soap|shampoo|personal/.test(s))return 'Personal care';return 'Groceries'}
-function applyProductInfo(code,p){
-  var name=$('#f_name'),cat=$('#f_cat'),codes=$('#f_codes'),nm=((p.brands||'')+' '+(p.product_name||'')+' '+(p.quantity||'')).replace(/\s+/g,' ').trim();
-  if(name&&nm&&!name.value.trim())name.value=nm;if(cat)cat.value=categoryFromFoodFacts(p);
-  if(codes){var a=String(codes.value||'').split(/[\s,;]+/).filter(Boolean);if(a.indexOf(code)<0)a.push(code);codes.value=a.join(', ')}
+function setPhotoPreview(src){
+  itemPhotoDraft=src||'';var p=$('#itemphotoprev');
+  if(p)p.outerHTML=src?'<img id="itemphotoprev" class="photoprev" src="'+esc(src)+'" alt="Product photo">':'<div id="itemphotoprev" class="photoph">No photo yet</div>';
 }
-function lookupProductCode(code){
-  if(!code)return Promise.resolve(false);photoStatus('Barcode '+code+' found — looking up the product…');
-  return fetch('https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json',{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){
-    if(j&&j.status===1&&j.product){applyProductInfo(code,j.product);photoStatus('Product details filled from the barcode. Check them, then add your prices and stock.','ok');return true}
-    var codes=$('#f_codes');if(codes){var a=String(codes.value||'').split(/[\s,;]+/).filter(Boolean);if(a.indexOf(code)<0)a.push(code);codes.value=a.join(', ')}
-    photoStatus('Barcode found and added. No reliable product listing was found, so check the remaining fields.');return false;
-  }).catch(function(){photoStatus('Barcode found, but product lookup is unavailable right now.');return false});
+function smartCategory(text){
+  var s=String(text||'').toLowerCase();
+  if(/shampoo|conditioner|soap|toothpaste|toothbrush|lotion|deodorant|cologne|perfume|sanitary|napkin|diaper|personal care/.test(s))return 'Personal care';
+  if(/detergent|laundry|dishwash|cleaner|bleach|fabric softener|household|insect|mosquito/.test(s))return 'Household';
+  if(/juice|coffee|tea|water|cola|soda|softdrink|soft drink|beverage|drink|milk|energy drink/.test(s))return 'Drinks';
+  if(/chips|cracker|biscuit|cookie|candy|chocolate|snack|wafer|nuts|popcorn/.test(s))return 'Snacks';
+  return 'Groceries';
+}
+function smartUnit(text,product){
+  var s=(String(text||'')+' '+String((product&&product.packaging)||'')).toLowerCase();
+  if(/sachet/.test(s))return 'sachet';
+  if(/bottle/.test(s))return 'bottle';
+  if(/\bcan\b|canned/.test(s))return 'can';
+  if(/\bbox\b|carton/.test(s))return 'box';
+  if(/\bbag\b|pouch/.test(s))return 'bag';
+  if(/\bpack\b|packet/.test(s))return 'pack';
+  if(/\bstick\b/.test(s))return 'stick';
+  return 'pc';
+}
+function cleanOcrLines(text){
+  var bad=/nutrition|ingredients|manufactured|distributed|customer|service|www\.|http|facebook|instagram|email|calories|energy|protein|fat|sodium|carbohydrate|serving|expiry|best before|barcode/i;
+  return String(text||'').split(/\r?\n/).map(function(x){return x.replace(/[|_~{}[\]<>]/g,' ').replace(/\s+/g,' ').trim()})
+    .filter(function(x){return x.length>=2&&x.length<=60&&!bad.test(x)&&/[A-Za-z]/.test(x)});
+}
+function inferNameFromOcr(text){
+  var lines=cleanOcrLines(text),picked=[];
+  for(var i=0;i<lines.length&&picked.length<3;i++){
+    var x=lines[i];
+    if(/^\d+([.,]\d+)?\s*(g|kg|ml|l|oz)\b/i.test(x))continue;
+    if((x.match(/[A-Za-z]/g)||[]).length<2)continue;
+    picked.push(x);
+  }
+  var name=picked.join(' ').replace(/\b(net wt|net weight|contents?)\b/ig,'').replace(/\s+/g,' ').trim();
+  var q=String(text||'').match(/\b\d+(?:[.,]\d+)?\s?(?:kg|g|ml|l)\b/i);
+  if(q&&name&&name.toLowerCase().indexOf(q[0].toLowerCase())<0)name+=' '+q[0];
+  return name.slice(0,90);
+}
+function addDetectedCode(code){
+  var codes=$('#f_codes');if(!codes||!code)return;
+  var a=String(codes.value||'').split(/[\s,;]+/).filter(Boolean);if(a.indexOf(code)<0)a.push(code);codes.value=a.join(', ');
+}
+function applyProductInfo(code,p,ocrText){
+  var name=$('#f_name'),cat=$('#f_cat'),unit=$('#f_unit'),buy=$('#f_buyUnit');
+  var nm=((p&&p.brands||'')+' '+(p&&p.product_name||'')+' '+(p&&p.quantity||'')).replace(/\s+/g,' ').trim();
+  if(!nm)nm=inferNameFromOcr(ocrText);
+  if(name&&nm&&!name.value.trim())name.value=nm.slice(0,100);
+  var basis=((p&&p.categories)||'')+' '+((p&&p.categories_tags||[]).join(' '))+' '+ocrText;
+  var inferredCat=smartCategory(basis);
+  if(cat&&(!cat.value||cat.value==='Groceries'||cat.value==='Other'))cat.value=inferredCat;
+  var inferredUnit=smartUnit((p&&p.packaging)||ocrText,p);
+  if(unit&&(!unit.value||unit.value==='pc'))unit.value=inferredUnit;
+  if(buy&&(!buy.value||buy.value==='pc'))buy.value=inferredUnit;
+  addDetectedCode(code);
+  return !!nm;
+}
+function productCatalogLookup(code){
+  var roots=[
+    'https://world.openfoodfacts.org/api/v2/product/',
+    'https://world.openbeautyfacts.org/api/v2/product/',
+    'https://world.openproductsfacts.org/api/v2/product/'
+  ],i=0;
+  function next(){
+    if(i>=roots.length)return Promise.resolve(null);
+    var url=roots[i++]+encodeURIComponent(code)+'.json';
+    return fetch(url,{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){
+      if(j&&j.status===1&&j.product)return j.product;
+      return next();
+    }).catch(next);
+  }
+  return next();
+}
+function lookupProductCode(code,ocrText){
+  if(!code)return Promise.resolve(false);
+  addDetectedCode(code);photoStatus('Barcode '+code+' found — checking product catalogs…');
+  return productCatalogLookup(code).then(function(p){
+    if(p){applyProductInfo(code,p,ocrText||'');return true}
+    return false;
+  });
+}
+function loadOCR(){
+  if(window.Tesseract)return Promise.resolve(window.Tesseract);
+  if(ocrPromise)return ocrPromise;
+  ocrPromise=loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js').then(function(){
+    if(!window.Tesseract)throw new Error('OCR unavailable');return window.Tesseract;
+  });
+  return ocrPromise;
+}
+function readPhotoText(src){
+  photoStatus('Reading the product label…');
+  return loadOCR().then(function(T){
+    return T.recognize(src,'eng',{logger:function(m){
+      if(m&&m.status==='recognizing text')photoStatus('Reading product text… '+Math.round((m.progress||0)*100)+'%');
+    }});
+  }).then(function(r){return r&&r.data?String(r.data.text||''):''}).catch(function(){return ''});
 }
 function photoCodeZXing(im){
   var ready=window.ZXing?Promise.resolve():loadScript('vendor/zxing.min.js').catch(function(){return loadScript('https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js')});
@@ -1385,17 +1483,45 @@ function photoCodeZXing(im){
     return Promise.resolve(p).then(function(res){try{if(rd.reset)rd.reset()}catch(e){};return res?(res.getText?res.getText():res.text):''});
   });
 }
+function detectPhotoCode(src){
+  return new Promise(function(resolve){
+    var im=new Image();im.onload=function(){
+      function fallback(){photoCodeZXing(im).then(function(code){resolve(code||'')}).catch(function(){resolve('')})}
+      if(!('BarcodeDetector' in window)){fallback();return}
+      detectorFormats().then(function(fs){
+        var det;try{det=new BarcodeDetector({formats:(fs&&fs.length)?fs:undefined})}catch(e){fallback();return}
+        det.detect(im).then(function(r){if(r&&r[0]&&r[0].rawValue)resolve(String(r[0].rawValue));else fallback()}).catch(fallback);
+      }).catch(fallback);
+    };im.onerror=function(){resolve('')};im.src=src;
+  });
+}
 function smartPhotoFill(){
-  if(!itemPhotoOriginalDraft&&!itemPhotoDraft){toast('Take a product photo first');return}
-  var src=itemPhotoOriginalDraft||itemPhotoDraft;photoStatus('Checking the photo for a barcode…');var im=new Image();
-  im.onload=function(){
-    function fallback(){photoCodeZXing(im).then(function(code){if(code)lookupProductCode(String(code));else photoStatus('No readable barcode found in the photo. Show the barcode clearly or use Scan barcode.')}).catch(function(){photoStatus('No readable barcode found in the photo. Show the barcode clearly or use Scan barcode.')})}
-    if(!('BarcodeDetector' in window)){fallback();return}
-    detectorFormats().then(function(fs){
-      var det;try{det=new BarcodeDetector({formats:(fs&&fs.length)?fs:undefined})}catch(e){fallback();return}
-      det.detect(im).then(function(r){if(r&&r[0]&&r[0].rawValue)lookupProductCode(String(r[0].rawValue));else fallback()}).catch(fallback);
-    }).catch(fallback);
-  };im.onerror=function(){photoStatus('Could not analyze this photo.')};im.src=src;
+  if(!itemPhotoOriginalDraft&&!itemPhotoDraft){toast('Take a product photo first');return Promise.resolve(false)}
+  var src=itemPhotoOriginalDraft||itemPhotoDraft;
+  photoStatus('Analyzing the product photo…');
+  return Promise.all([readPhotoText(src),detectPhotoCode(src)]).then(function(r){
+    var text=r[0]||'',code=r[1]||'',name=$('#f_name'),cat=$('#f_cat'),unit=$('#f_unit'),buy=$('#f_buyUnit');
+    var ocrName=inferNameFromOcr(text);
+    if(name&&ocrName&&!name.value.trim())name.value=ocrName;
+    var inferredCat=smartCategory(text);if(cat&&(!cat.value||cat.value==='Groceries'||cat.value==='Other'))cat.value=inferredCat;
+    var inferredUnit=smartUnit(text,null);if(unit&&(!unit.value||unit.value==='pc'))unit.value=inferredUnit;if(buy&&(!buy.value||buy.value==='pc'))buy.value=inferredUnit;
+    if(code)return lookupProductCode(code,text).then(function(found){
+      photoStatus(found?'Smart Fill completed from package text + barcode. Check the fields before saving.':'Smart Fill read the package text and barcode. Check the fields before saving.','ok');return true;
+    });
+    photoStatus(ocrName?'Smart Fill read the package text and filled what it could. Check the fields before saving.':'I could not read enough text from this photo. Try a closer, straighter photo of the front label.','ok');
+    return !!ocrName;
+  }).catch(function(){photoStatus('Smart Fill could not analyze this photo. Try a clearer front-facing photo.');return false});
+}
+function autoCleanPhoto(){
+  if(!itemPhotoOriginalDraft)return Promise.resolve(false);
+  photoStatus('Removing background with AI…');
+  return removePhotoBackground(itemPhotoOriginalDraft).then(function(clean){
+    if(clean){setPhotoPreview(clean);photoStatus('Smart Fill and AI background cleanup finished. Check the result before saving.','ok');return true}
+    return false;
+  }).catch(function(){
+    setPhotoPreview(itemPhotoOriginalDraft);photoStatus('Smart Fill finished. AI background removal was unavailable, so Lucy kept the original photo.');
+    return false;
+  });
 }
 
 /* ---------- barcode scanning ---------- */
@@ -1601,7 +1727,7 @@ var ACT={
   scanitem:function(id){var d=fd();d.photo=itemPhotoDraft;openScanner({title:'Scan item barcode',on:function(code){stopScan();var a=String(d.codes||'').split(/[\s,;]+/).filter(Boolean);if(a.indexOf(code)<0)a.push(code);d.codes=a.join(', ');setTimeout(function(){closeModal();itemForm(id||null,d)},0)}})},
   clearphoto:function(){itemPhotoDraft='';itemPhotoOriginalDraft='';setPhotoPreview('')},
   photooriginal:function(){if(itemPhotoOriginalDraft){setPhotoPreview(itemPhotoOriginalDraft);photoStatus('Using the original photo.')}},
-  bgclean:function(){if(!itemPhotoOriginalDraft&&!itemPhotoDraft){toast('Take a photo first');return}photoStatus('Removing the background…');removePhotoBackground(itemPhotoOriginalDraft||itemPhotoDraft).then(function(x){setPhotoPreview(x);photoStatus('Background cleaned.','ok')}).catch(function(){photoStatus('Could not clean this background reliably.')})},
+  bgclean:function(){if(!itemPhotoOriginalDraft&&!itemPhotoDraft){toast('Take a photo first');return}photoStatus('Removing background with AI…');removePhotoBackground(itemPhotoOriginalDraft||itemPhotoDraft).then(function(x){setPhotoPreview(x);photoStatus('AI background removal finished.','ok')}).catch(function(){setPhotoPreview(itemPhotoOriginalDraft||itemPhotoDraft);photoStatus('AI background removal was unavailable, so Lucy kept the original photo.')})},
   smartphoto:function(){smartPhotoFill()},
   codenew:function(code){closeModal();itemForm(null,{name:'',cat:'Groceries',unit:'pc',buyUnit:'pc',packQty:1,cost:'',price:'',start:'',reorder:5,codes:[code],photo:'',fractional:false})},
   codelink:function(code){closeModal();linkCodeForm(code)},
@@ -1680,9 +1806,8 @@ document.addEventListener('change',function(e){
   var file=t.files[0];if(!/^image\//.test(file.type||'')){toast('Choose an image file');return}
   var r=new FileReader();itemPhotoBusy=true;photoStatus('Preparing photo…');
   r.onload=function(){var im=new Image();im.onload=function(){
-    itemPhotoOriginalDraft=dataUrlFromImage(im);setPhotoPreview(itemPhotoOriginalDraft);photoStatus('Removing the background…');
-    removePhotoBackground(itemPhotoOriginalDraft).then(function(clean){setPhotoPreview(clean);photoStatus('Background cleaned. Checking product details…','ok');smartPhotoFill();itemPhotoBusy=false})
-      .catch(function(){setPhotoPreview(itemPhotoOriginalDraft);photoStatus('Photo ready. The original was kept because cleanup was not reliable.');smartPhotoFill();itemPhotoBusy=false});
+    itemPhotoOriginalDraft=dataUrlFromImage(im);setPhotoPreview(itemPhotoOriginalDraft);
+    smartPhotoFill().then(function(){return autoCleanPhoto()}).finally(function(){itemPhotoBusy=false});
   };im.onerror=function(){itemPhotoBusy=false;toast('Could not read that image')};im.src=String(r.result||'')};
   r.onerror=function(){itemPhotoBusy=false;toast('Could not read that image')};r.readAsDataURL(file);
 });
