@@ -682,7 +682,7 @@ function productGrid(){
 }
 function viewSell(c){
   var sales=S.tx.filter(function(t){return t.type==='sale'}).sort(function(a,b){return b.ts-a.ts}).slice(0,6);
-  return head('Sell','Scan a barcode or tap items to add them to the cart.')+
+  return head('Sell','Tap a product or scan its barcode.')+
    '<div class="row" style="display:flex;gap:.6rem"><div class="search" style="flex:1"><span class="sr"><label for="sellSearch">Search items</label></span>'+ic('search',18)+'<input id="sellSearch" data-input="sellQ" type="search" placeholder="Search or scan barcode" value="'+esc(ui.sellQ)+'" autocomplete="off"></div><button class="btn btn-red" data-act="scansell">'+ic('scan',18)+'Scan</button><button class="btn" data-act="custom">'+ic('plus',18)+'Custom</button></div>'+
    '<div id="results">'+productGrid()+'</div>'+
    '<div class="card" style="margin-top:1rem"><div class="cardhead"><h2>Recent sales</h2></div>'+(sales.length?'<div class="list">'+sales.map(function(t){return txRow(t)}).join('')+'</div>':empty('No sales yet','Completed sales appear here.'))+'</div>';
@@ -705,14 +705,14 @@ function viewBilliards(c){
   var bs=billiardState(),sessions=bs.sessions.slice().sort(function(a,b){return a.start-b.start}),sv=billiardServices();
   var day=startOfDay(now()),recent=S.tx.filter(function(t){if(t.void||t.type!=='sale')return false;return (t.lines||[]).some(function(l){return l.biz==='billiard'})||t.biz==='billiard'}).sort(function(a,b){return b.ts-a.ts});
   var sales=recent.filter(function(t){return t.ts>=day}).reduce(function(a,t){return a+(t.rev||0)},0);
-  var h=head('Billiards','Track active games separately from sari-sari sales.')+
-    '<div class="grid2"><div class="card bg-sea"><div class="kicker">Active sessions</div><div class="bigval" style="font-size:2rem;margin-top:.2rem">'+sessions.length+'</div></div>'+
-    '<div class="card bg-palm"><div class="kicker">Billiard sales today</div><div class="bigval num" style="font-size:1.7rem;margin-top:.2rem">'+fmt(sales)+'</div></div></div>'+
-    '<div class="actions" style="margin-top:.75rem"><button class="btn btn-green" data-act="billstart">'+ic('plus',18)+'Start session</button><button class="btn" data-act="billservice">'+ic('gear',18)+'Billiard rate/service</button></div>';
+  var h=head('Billiards','Start a game, let Lucy time it, then charge when they finish.')+
+    '<div class="grid2"><div class="card bg-sea"><div class="kicker">Games playing now</div><div class="bigval" style="font-size:2rem;margin-top:.2rem">'+sessions.length+'</div></div>'+
+    '<div class="card bg-palm"><div class="kicker">Earned today</div><div class="bigval num" style="font-size:1.7rem;margin-top:.2rem">'+fmt(sales)+'</div></div></div>'+
+    '<div class="actions" style="margin-top:.75rem"><button class="btn btn-green" data-act="billstart">'+ic('plus',18)+'Start session</button><button class="btn" data-act="billservice">'+ic('gear',18)+'Rate settings</button></div>';
   h+='<div class="card" style="margin-top:.75rem"><div class="cardhead"><h2>Playing now</h2></div>';
   if(sessions.length)h+='<div class="list">'+sessions.map(function(s){return '<div class="li"><div class="grow"><div class="t">'+esc(s.label||'Billiard session')+'</div><div class="s">Started '+esc(fdate(s.start))+' · '+durationText(s.start,now())+' · '+fmt(s.rate)+'/hour</div></div><button class="btn btn-sm btn-red" data-act="billend" data-id="'+s.id+'">End &amp; charge</button></div>'}).join('')+'</div>';
   else h+=empty('No active games','Tap Start session when someone begins playing.');
-  h+='</div><div class="card" style="margin-top:.75rem"><div class="cardhead"><h2>Rate & service</h2></div>';
+  h+='</div><div class="card" style="margin-top:.75rem"><div class="cardhead"><h2>Your rate</h2></div>';
   if(sv.length)h+='<div class="list">'+sv.map(function(i){return '<div class="li"><div class="grow"><div class="t">'+esc(i.name)+'</div><div class="s">'+fmt(i.price)+' per '+esc(i.unit||'game')+'</div></div><button class="btn btn-sm" data-act="edititem" data-id="'+i.id+'">Edit</button></div>'}).join('')+'</div>';
   else h+=empty('No billiard service yet','Start a session and enter the hourly rate, or create a reusable rate/service here.');
   h+='</div><div class="card" style="margin-top:.75rem"><div class="cardhead"><h2>Recent billiard activity</h2></div>'+(recent.length?'<div class="list">'+recent.slice(0,8).map(function(t){return txRow(t)}).join('')+'</div>':empty('Nothing yet','Finished billiard sessions will appear here.'))+'</div>';
@@ -761,9 +761,9 @@ function stockRows(c){
 function viewStock(c){
   var cost=0,retail=0,lowN=0;
   S.items.forEach(function(i){if(i.svc)return;var st=Math.max(0,c.stock[i.id]);cost+=st*i.cost;retail+=st*i.price;if(i.reorder>0&&c.stock[i.id]<=i.reorder)lowN++});
-  return '<div class="pagehead" style="display:flex;justify-content:space-between;align-items:flex-end;gap:.6rem"><div><h1>Inventory</h1><p>'+plural(S.items.length,'item')+' tracked</p></div><button class="btn" data-act="scanstock">'+ic('scan',18)+'Scan</button> <button class="btn btn-green" data-act="additem">'+ic('plus',18)+'Add item</button></div>'+
-   '<div class="grid4"><div class="card flat"><div class="kicker">Stock value (cost)</div><div class="bigval num" style="font-size:1.25rem;margin-top:.2rem">'+fmt(cost)+'</div></div><div class="card flat"><div class="kicker">If all sold</div><div class="bigval num" style="font-size:1.25rem;margin-top:.2rem">'+fmt(retail)+'</div></div><div class="card flat"><div class="kicker">Potential profit</div><div class="bigval num green" style="font-size:1.25rem;margin-top:.2rem">'+fmt(retail-cost)+'</div></div><div class="card flat bg-sun"><div class="kicker">Need restock</div><div class="bigval" style="font-size:1.25rem;margin-top:.2rem">'+lowN+'</div></div></div>'+
-   '<div class="search" style="margin-top:.8rem"><span class="sr"><label for="stockSearch">Search inventory</label></span>'+ic('search',18)+'<input id="stockSearch" data-input="stockQ" type="search" placeholder="Search name or barcode" value="'+esc(ui.stockQ)+'" autocomplete="off"></div>'+
+  return '<div class="pagehead" style="display:flex;justify-content:space-between;align-items:flex-end;gap:.6rem"><div><h1>Stock</h1><p>'+plural(S.items.length,'product')+' saved</p></div><button class="btn" data-act="scanstock">'+ic('scan',18)+'Scan</button> <button class="btn btn-green" data-act="additem">'+ic('plus',18)+'Add item</button></div>'+
+   '<div class="grid4"><div class="card flat"><div class="kicker">What your stock cost</div><div class="bigval num" style="font-size:1.25rem;margin-top:.2rem">'+fmt(cost)+'</div></div><div class="card flat"><div class="kicker">If everything sells</div><div class="bigval num" style="font-size:1.25rem;margin-top:.2rem">'+fmt(retail)+'</div></div><div class="card flat"><div class="kicker">Possible profit</div><div class="bigval num green" style="font-size:1.25rem;margin-top:.2rem">'+fmt(retail-cost)+'</div></div><div class="card flat bg-sun"><div class="kicker">Running low</div><div class="bigval" style="font-size:1.25rem;margin-top:.2rem">'+lowN+'</div></div></div>'+
+   '<div class="search" style="margin-top:.8rem"><span class="sr"><label for="stockSearch">Search inventory</label></span>'+ic('search',18)+'<input id="stockSearch" data-input="stockQ" type="search" placeholder="Find a product" value="'+esc(ui.stockQ)+'" autocomplete="off"></div>'+
    '<div class="chips" role="group" aria-label="Filter">'+[['all','All'],['low','Low stock'],['out','Out of stock']].map(function(f){return '<button class="chip" data-act="stockf" data-id="'+f[0]+'" aria-pressed="'+(ui.stockF===f[0])+'">'+f[1]+'</button>'}).join('')+'</div>'+
    '<div class="card" id="results">'+stockRows(c)+'</div>';
 }
@@ -773,8 +773,8 @@ function viewUtang(c){
   var rows=S.suki.slice().sort(function(a,b){return (c.debt[b.id]||0)-(c.debt[a.id]||0)||a.name.localeCompare(b.name)});
   var owed=0,od=0,odAmt=0;
   rows.forEach(function(s){var b=c.debt[s.id];if(b>0.005){owed+=b;if(c.age[s.id]>=14){od++;odAmt+=b}}});
-  return '<div class="pagehead" style="display:flex;justify-content:space-between;align-items:flex-end;gap:.6rem"><div><h1>Utang</h1><p>What your suki owe you</p></div><button class="btn btn-green" data-act="addsuki">'+ic('plus',18)+'Add suki</button></div>'+
-   '<div class="grid2"><div class="card bg-tomato"><div class="kicker">Total owed</div><div class="bigval num" style="font-size:1.9rem;margin-top:.2rem">'+fmt(owed)+'</div></div><div class="card"><div class="kicker">Overdue (14+ days)</div><div class="bigval num" style="font-size:1.9rem;margin-top:.2rem">'+fmt(odAmt)+'</div><div class="soft" style="font-size:.8rem">'+od+' suki'+'</div></div></div>'+
+  return '<div class="pagehead" style="display:flex;justify-content:space-between;align-items:flex-end;gap:.6rem"><div><h1>Utang</h1><p>Who owes you and how much</p></div><button class="btn btn-green" data-act="addsuki">'+ic('plus',18)+'Add suki</button></div>'+
+   '<div class="grid2"><div class="card bg-tomato"><div class="kicker">Total owed</div><div class="bigval num" style="font-size:1.9rem;margin-top:.2rem">'+fmt(owed)+'</div></div><div class="card"><div class="kicker">Old utang (14+ days)</div><div class="bigval num" style="font-size:1.9rem;margin-top:.2rem">'+fmt(odAmt)+'</div><div class="soft" style="font-size:.8rem">'+od+' suki'+'</div></div></div>'+
    '<div class="card" style="margin-top:.75rem">'+(rows.length?'<div class="list">'+rows.map(function(s){var b=c.debt[s.id],a=c.age[s.id];
      return '<div class="li" data-act="suki" data-id="'+s.id+'" style="cursor:pointer"><div class="grow"><div class="t">'+esc(s.name)+'</div><div class="s">'+(b>0.005?ageText(a):'All settled')+'</div></div>'+(b>0.005?(a>=14?tag('Overdue','r'):a>=7?tag(a+' days','s'):''):tag('Paid','g'))+'<div class="amt num" style="min-width:4.5rem">'+fmt(b)+'</div></div>'}).join('')+'</div>':empty('No suki yet','Add your regular customers to record utang and payments.','<button class="btn btn-green" data-act="addsuki">'+ic('plus',18)+'Add suki</button>'))+'</div>';
 }
@@ -784,7 +784,7 @@ function sukiBody(id){
   var over=s.limit>0&&b>s.limit;
   return '<div class="card '+(b>0.005?'bg-tomato':'bg-palm')+' flat" style="margin-bottom:.75rem"><div class="kicker">Balance</div><div class="bigval num" style="font-size:2.2rem;margin-top:.2rem">'+fmt(b)+'</div><div class="soft" style="font-size:.85rem">'+(b>0.005?ageText(c.age[id]):'Nothing owed')+(s.limit>0?' · Limit '+fmt(s.limit):'')+(s.phone?' · '+esc(s.phone):'')+'</div></div>'+
    (over?'<div class="warn">Over the credit limit by '+fmt(b-s.limit)+'.</div>':'')+(s.note?'<div class="note">'+esc(s.note)+'</div>':'')+
-   '<div class="actions"><button type="button" class="btn btn-green" data-act="collect" data-id="'+id+'">Collect payment</button><button type="button" class="btn btn-red" data-act="newutang" data-id="'+id+'">Add utang (goods)</button><button type="button" class="btn" data-act="lend" data-id="'+id+'">Lend cash</button><button type="button" class="btn" data-act="editsuki" data-id="'+id+'">Edit</button></div>'+
+   '<div class="actions"><button type="button" class="btn btn-green" data-act="collect" data-id="'+id+'">Record payment</button><button type="button" class="btn btn-red" data-act="newutang" data-id="'+id+'">Sell on utang</button><button type="button" class="btn" data-act="lend" data-id="'+id+'">Lend cash</button><button type="button" class="btn" data-act="editsuki" data-id="'+id+'">Edit</button></div>'+
    '<h3 style="margin:1rem 0 .3rem;font-size:1rem">History</h3>'+(hist.length?'<div class="list">'+hist.map(function(t){return txRow(t)}).join('')+'</div>':empty('No history','Utang and payments for this suki will show here.'));
 }
 function openSuki(id){openModal({title:sukiName(id),body:function(){return sukiBody(id)},reopen:function(){openSuki(id)},focus:false})}
@@ -795,10 +795,10 @@ function viewWallet(c){
   var t0=startOfDay(now()),td=S.tx.filter(function(t){return t.type==='ew'&&t.ts>=t0});
   var fee=td.reduce(function(a,t){return a+(t.fee||0)},0),vol=td.reduce(function(a,t){return a+(t.amount||0)},0);
   var hist=S.tx.filter(function(t){return t.wid}).sort(function(a,b){return b.ts-a.ts}).slice(0,40);
-  return head('E-Wallet','Cash-in, cash-out and load business for GCash, MariBank and others.')+'<div class="stack">'+
-   '<div class="grid2">'+S.wallets.map(function(w){return '<div class="card bg-sea"><div class="kicker">'+esc(w.name)+'</div><div class="bigval num" style="font-size:1.8rem;margin:.2rem 0 .4rem">'+fmt(c.wal[w.id])+'</div><button class="btn btn-sm" data-act="adjwallet" data-id="'+w.id+'">Match actual balance</button></div>'}).join('')+'</div>'+
+  return head('E-Wallet','Record GCash, MariBank, load and other e-wallet transactions.')+'<div class="stack">'+
+   '<div class="grid2">'+S.wallets.map(function(w){return '<div class="card bg-sea"><div class="kicker">'+esc(w.name)+'</div><div class="bigval num" style="font-size:1.8rem;margin:.2rem 0 .4rem">'+fmt(c.wal[w.id])+'</div><button class="btn btn-sm" data-act="adjwallet" data-id="'+w.id+'">Fix balance</button></div>'}).join('')+'</div>'+
    '<div class="actions four"><button class="btn btn-green" data-act="ew" data-id="cashin">'+ic('down',18)+'Cash-in</button><button class="btn btn-red" data-act="ew" data-id="cashout">'+ic('up',18)+'Cash-out</button><button class="btn btn-blue" data-act="ew" data-id="load">'+ic('phone',18)+'Load / bills</button><button class="btn" data-act="move">'+ic('swap',18)+'Move money</button></div>'+
-   '<div class="note"><b>Cash-in:</b> customer gives you cash, you send e-money. <b>Cash-out:</b> customer sends e-money, you give cash. <b>Load / bills:</b> you pay from your wallet and the customer pays you cash. <b>Move money:</b> top up a wallet from your drawer or withdraw to it.</div>'+
+   '<div class="note"><b>Cash-in:</b> they give you cash; you send e-money. <b>Cash-out:</b> they send e-money; you give cash. <b>Load / bills:</b> you pay from your wallet; they pay you. <b>Move money:</b> transfer between your drawer and wallet.</div>'+
    '<div class="grid2"><div class="card flat"><div class="kicker">Fees earned today</div><div class="bigval num green" style="font-size:1.5rem;margin-top:.2rem">'+fmt(fee)+'</div></div><div class="card flat"><div class="kicker">Volume today</div><div class="bigval num" style="font-size:1.5rem;margin-top:.2rem">'+fmt(vol)+'</div><div class="soft" style="font-size:.8rem">'+plural(td.length,'transaction')+'</div></div></div>'+
    '<div class="card"><div class="cardhead"><h2>Wallet activity</h2></div>'+(hist.length?'<div class="list">'+hist.map(function(t){return txRow(t)}).join('')+'</div>':empty('No wallet activity','Record a cash-in, cash-out or load to get started.'))+'</div></div>';
 }
@@ -860,13 +860,13 @@ function viewMoney(c){
   var inK=Object.keys(r.inBy).sort(function(a,b){return r.inBy[b]-r.inBy[a]}),outK=Object.keys(r.outBy).sort(function(a,b){return r.outBy[b]-r.outBy[a]});
   var ledger=S.tx.filter(function(t){return t.ts>=pr.from&&t.ts<pr.to}).sort(function(a,b){return b.ts-a.ts});
   var days=(pr.to-pr.from)/DAY>1?dayBuckets(pr.from,Math.min(pr.to,startOfDay(now())+DAY)):null;
-  return head('Money','Cash flow, profit and your full ledger.')+'<div class="stack">'+
-   '<div class="card hero"><div class="kicker">Cash in drawer</div><div class="bigval" style="font-size:2.4rem;margin:.3rem 0 .3rem">'+fmt(c.cash)+'</div>'+drawerSplit(c)+'<div class="rowbtns" style="margin:.7rem 0 0"><button class="btn btn-sm" data-act="count">Count cash</button><button class="btn btn-sm" data-act="expense">Add expense</button><button class="btn btn-sm" data-act="owner">Owner in / out</button></div></div>'+
+  return head('Money','See what came in, what went out, and what you earned.')+'<div class="stack">'+
+   '<div class="card hero"><div class="kicker">Cash in drawer</div><div class="bigval" style="font-size:2.4rem;margin:.3rem 0 .3rem">'+fmt(c.cash)+'</div>'+drawerSplit(c)+'<div class="rowbtns" style="margin:.7rem 0 0"><button class="btn btn-sm" data-act="count">Count cash</button><button class="btn btn-sm" data-act="expense">Add expense</button><button class="btn btn-sm" data-act="owner">Personal money</button></div></div>'+
    '<div class="chips" role="group" aria-label="Period" style="margin:0">'+[['today','Today'],['7d','7 days'],['30d','30 days'],['month','This month']].map(function(p){return '<button class="chip" data-act="period" data-id="'+p[0]+'" aria-pressed="'+(ui.period===p[0])+'">'+p[1]+'</button>'}).join('')+'</div>'+
    '<div class="card"><div class="cardhead"><h2>Profit — '+esc(pr.label)+'</h2></div>'+
-    '<div class="kv"><span>Sales ('+plural(r.n,'sale')+')</span><b class="num">'+fmt(r.rev)+'</b></div><div class="kv sub"><span>− Cost of goods sold</span><span class="num">'+fmt(r.cogs)+'</span></div>'+
-    '<div class="kv"><span>Gross profit</span><b class="num">'+fmt(r.gross)+'</b></div><div class="kv"><span>+ E-wallet fees</span><b class="num">'+fmt(r.fee)+'</b></div><div class="kv"><span>− Expenses &amp; losses</span><b class="num">'+fmt(r.exp)+'</b></div>'+
-    '<div class="kv total"><span>Net profit</span><span class="num '+(r.net<0?'red':'green')+'">'+fmt(r.net)+'</span></div><div class="hint" style="margin:.5rem 0 0">Sales on utang count when sold, even if not collected yet.</div></div>'+
+    '<div class="kv"><span>Sales ('+plural(r.n,'sale')+')</span><b class="num">'+fmt(r.rev)+'</b></div><div class="kv sub"><span>− Cost of items sold</span><span class="num">'+fmt(r.cogs)+'</span></div>'+
+    '<div class="kv"><span>Profit from sales</span><b class="num">'+fmt(r.gross)+'</b></div><div class="kv"><span>+ E-wallet fees</span><b class="num">'+fmt(r.fee)+'</b></div><div class="kv"><span>− Expenses and losses</span><b class="num">'+fmt(r.exp)+'</b></div>'+
+    '<div class="kv total"><span>Profit after expenses</span><span class="num '+(r.net<0?'red':'green')+'">'+fmt(r.net)+'</span></div><div class="hint" style="margin:.5rem 0 0">Sales on utang count when sold, even if not collected yet.</div></div>'+
    (BIZ.filter(function(b){var x=r.biz[b[0]];return x.rev||x.exp}).length>1
      ? '<div class="card"><div class="cardhead"><h2>By business — '+esc(pr.label)+'</h2></div>'+
        BIZ.map(function(b){var x=r.biz[b[0]];
@@ -882,8 +882,8 @@ function viewMoney(c){
     (days?chart(days,[{k:'cin',c:'cb',l:'Cash in'},{k:'cout',c:'cc',l:'Cash out'}],'Cash in and cash out per day')+'<div style="height:.6rem"></div>':'')+
     '<div class="kv"><b>Cash in</b><b class="num green">'+fmt(r.cashIn)+'</b></div>'+(inK.map(function(k){return '<div class="kv sub"><span>'+esc(k)+'</span><span class="num">'+fmt(r.inBy[k])+'</span></div>'}).join('')||'<div class="kv sub"><span>Nothing yet</span></div>')+
     '<div class="kv" style="margin-top:.4rem"><b>Cash out</b><b class="num red">'+fmt(r.cashOut)+'</b></div>'+(outK.map(function(k){return '<div class="kv sub"><span>'+esc(k)+'</span><span class="num">'+fmt(r.outBy[k])+'</span></div>'}).join('')||'<div class="kv sub"><span>Nothing yet</span></div>')+
-    '<div class="kv total"><span>Net change in drawer cash</span><span class="num '+((r.cashIn-r.cashOut)<0?'red':'green')+'">'+sgn(r.cashIn-r.cashOut)+'</span></div></div>'+
-   '<div class="card"><div class="cardhead"><h2>Ledger</h2><span class="soft" style="font-size:.8rem">'+plural(ledger.length,'entry').replace('entrys','entries')+'</span></div>'+
+    '<div class="kv total"><span>Change in drawer cash</span><span class="num '+((r.cashIn-r.cashOut)<0?'red':'green')+'">'+sgn(r.cashIn-r.cashOut)+'</span></div></div>'+
+   '<div class="card"><div class="cardhead"><h2>All activity</h2><span class="soft" style="font-size:.8rem">'+plural(ledger.length,'entry').replace('entrys','entries')+'</span></div>'+
     (ledger.length?'<div class="list">'+ledger.slice(0,ui.ledgerN).map(function(t){return txRow(t)}).join('')+'</div>'+(ledger.length>ui.ledgerN?'<button class="btn btn-block" style="margin-top:.6rem" data-act="moreledger">Show more</button>':''):empty('No entries','Nothing recorded for this period.'))+'</div></div>';
 }
 
@@ -963,26 +963,26 @@ function itemForm(id,draft){
 function restockForm(id){
   var it=item(id);if(!it)return;
   var mult=num(it.packQty)||1,bu=it.buyUnit||it.unit||'unit',su=it.unit||'unit';
-  form('Restock — '+it.name,function(){return '<p class="hint" style="margin-top:0">1 '+esc(bu)+' = <b>'+mult+' '+esc(su)+'</b>. Stock will be added in '+esc(su)+'.</p>'+
-    '<div class="two">'+field('Number of '+bu+' bought','qty','',{num:1})+field('Cost per '+bu+' (₱)','cost',it.cost? r2(it.cost*mult):'',{num:1})+'</div>'+
-    '<div id="rtotal" class="hint">Stock added: 0 '+esc(su)+' · Total: ₱0</div>'+
-    sel('Which business?','biz',BIZ,it.biz||'store')+sel('Paid from','from',[['cash','Cash drawer']].concat(walletOpts().map(function(w){return ['w:'+w[0],w[1]]})).concat([['none','Not from my records (own pocket / on credit)']]),'cash')+
-    '<label class="check"><input type="checkbox" name="upd" value="1" checked> Recalculate cost per '+esc(su)+' from this purchase</label>'+field('Note (optional)','note','')},
+  form('Add stock — '+it.name,function(){return '<p class="hint" style="margin-top:0">You buy this by <b>'+esc(bu)+'</b>. Lucy will convert it to the '+esc(su)+' you sell.</p>'+
+    '<div class="two">'+field('How many '+bu+' did you buy?','qty','',{num:1})+field('What did one '+bu+' cost? (₱)','cost',it.cost? r2(it.cost*mult):'',{num:1})+'</div>'+
+    '<div id="rtotal" class="hint">Adding: 0 '+esc(su)+' · Total: ₱0</div>'+
+    sel('Which part of the business?','biz',BIZ,it.biz||'store')+sel('How did you pay?','from',[['cash','Cash drawer']].concat(walletOpts().map(function(w){return ['w:'+w[0],w[1]]})).concat([['none','Not from my records (own pocket / on credit)']]),'cash')+
+    '<label class="check"><input type="checkbox" name="upd" value="1" checked> Update my cost price using this purchase</label>'+field('Note (optional)','note','')},
   function(d){
     var q=num(d.qty),cost=num(d.cost);if(q<=0){toast('Enter how many '+bu+' you bought');return false}
     var add=r2(q*mult),total=r2(q*cost),unitCost=mult?cost/mult:cost;
     var t={id:uid(),ts:now(),type:'restock',lines:[{iid:id,name:it.name,qty:q,cost:cost,buyUnit:bu,stockQty:add,unit:su}],stk:[{iid:id,q:add}],purch:total,note:(d.note||'').trim()};
     if(d.from==='cash')t.cash=-total;else if(d.from&&d.from.indexOf('w:')===0){t.wid=d.from.slice(2);t.wal=-total}
     if(d.upd&&cost>0)it.cost=r2(unitCost);
-    t.biz=it.biz||'store';S.tx.push(t);save();toast('Added '+add+' '+su+' to stock');
+    t.biz=it.biz||'store';S.tx.push(t);save();toast('Stock added: '+add+' '+su);
   },{hook:function(){var d=fd(),q=num(d.qty),cost=num(d.cost),e=$('#rtotal');if(e)e.textContent='Stock added: '+r2(q*mult)+' '+su+' · Total: '+fmt(q*cost)}});
 }
 function adjustForm(id){
   var it=item(id);if(!it)return;
-  form('Adjust stock — '+it.name,function(){return '<p class="hint" style="margin-top:0">Now recorded: <b>'+(+C.stock[id].toFixed(2))+' '+esc(it.unit||'')+'</b>. Enter a negative number to remove stock.</p>'+
-    field('Change in quantity (+/−)','q','',{num:1,neg:1,ph:'e.g. −3 or 5'})+
+  form('Fix stock count — '+it.name,function(){return '<p class="hint" style="margin-top:0">Lucy currently shows: <b>'+(+C.stock[id].toFixed(2))+' '+esc(it.unit||'')+'</b>. Enter a negative number to remove stock.</p>'+
+    field('How many should be added or removed?','q','',{num:1,neg:1,ph:'e.g. −3 or 5'})+
     sel('Reason','reason',[['Damaged / expired','Damaged or expired'],['Own use / gave away','Own use or given away'],['Lost / missing','Lost or missing'],['Count correction','Count correction']],'Damaged / expired')+
-    '<div class="hint">Removed stock is counted as a loss at cost price, except for count corrections.</div>'},
+    '<div class="hint">Use a minus number to remove stock, for example −3.</div>'},
   function(d){
     var q=num(d.q);if(!q){toast('Enter how many to add or remove');return false}
     var t={id:uid(),ts:now(),type:'stock_adj',lines:[{iid:id,name:it.name,qty:q,cost:it.cost}],stk:[{iid:id,q:q}],note:d.reason};
@@ -992,7 +992,7 @@ function adjustForm(id){
 }
 function sukiForm(id,then){
   var s=id?suki(id):{name:'',phone:'',limit:'',note:''},newId=null;
-  form(id?'Edit suki':'Add suki',function(){return field('Name','name',s.name)+field('Phone (optional)','phone',s.phone)+field('Credit limit ₱ (optional)','limit',s.limit,{num:1})+(id?'':field('Existing utang ₱ (if any)','open','',{num:1}))+field('Note (optional)','note',s.note)+
+  form(id?'Edit suki':'Add suki',function(){return field('Name','name',s.name)+field('Phone (optional)','phone',s.phone)+field('Maximum utang (₱, optional)','limit',s.limit,{num:1})+(id?'':field('How much do they already owe? (₱)','open','',{num:1}))+field('Note (optional)','note',s.note)+
     (id?'<button type="button" class="btn btn-red btn-sm" data-act="delsuki" data-id="'+id+'">Delete suki</button>':'')},
   function(d){
     var name=(d.name||'').trim();if(!name){toast('Enter a name');return false}
@@ -1003,8 +1003,8 @@ function sukiForm(id,then){
 }
 function collectForm(id){
   var b=calc().debt[id]||0;
-  form('Collect payment — '+sname(id),function(){return '<p class="hint" style="margin-top:0">They owe '+fmt(b)+'.</p>'+field('Amount received (₱)','amt',b>0?r2(b):'',{num:1})+
-    sel('Received as','via',[['cash','Cash (into drawer)']].concat(walletOpts().map(function(w){return ['w:'+w[0],w[1]+' (e-wallet)']})).concat([['writeoff','Write off (they won\'t pay)']]),'cash')+field('Note (optional)','note','')},
+  form('Payment from '+sname(id),function(){return '<p class="hint" style="margin-top:0">They owe '+fmt(b)+'.</p>'+field('Amount received (₱)','amt',b>0?r2(b):'',{num:1})+
+    sel('How did they pay?','via',[['cash','Cash (into drawer)']].concat(walletOpts().map(function(w){return ['w:'+w[0],w[1]+' (e-wallet)']})).concat([['writeoff','Mark as uncollectible']]),'cash')+field('Note (optional)','note','')},
   function(d){
     var a=num(d.amt);if(a<=0){toast('Enter an amount');return false}
     if(a>b+0.005){toast('That is more than they owe ('+fmt(b)+')');return false}
@@ -1028,17 +1028,17 @@ function expenseForm(){
     t.biz=d.biz||'store';S.tx.push(t);save();toast('Expense recorded')});
 }
 function ownerForm(){
-  form('Owner cash in / out',function(){return sel('What happened?','dir',[['in','I put my own money in'],['out','I took money out (personal use)']],'in')+field('Amount (₱)','amt','',{num:1})+sel('Which drawer?','biz',BIZ,'store')+field('Note (optional)','note','')+'<div class="hint">This moves cash but does not count as profit or an expense.</div>'},
+  form('Personal money',function(){return sel('What did you do?','dir',[['in','I added my own money to the store'],['out','I took store cash for personal use']],'in')+field('Amount (₱)','amt','',{num:1})+sel('Which cash box?','biz',BIZ,'store')+field('Note (optional)','note','')+'<div class="hint">This only changes the cash balance. It does not count as a sale.</div>'},
   function(d){var a=num(d.amt);if(a<=0){toast('Enter an amount');return false}
     S.tx.push({id:uid(),ts:now(),type:'owner',cash:d.dir==='in'?a:-a,biz:d.biz||'store',note:(d.note||'').trim()});save();toast('Recorded')});
 }
 function countForm(){
   var dr=calc().drawer;
-  form('Count your cash',function(){
-    return '<p class="hint" style="margin-top:0">Count each cash box and enter what is really in it. Leave one blank to skip it.</p>'+
+  form('Check cash on hand',function(){
+    return '<p class="hint" style="margin-top:0">Count the actual cash in each box and enter it below. Lucy will show any difference.</p>'+
       BIZ.map(function(b){
         return '<div class="lbl">'+esc(b[1])+' — records say '+fmt(dr[b[0]])+'</div>'+
-          field('Counted (₱)','c_'+b[0],'',{num:1})+'<div id="d_'+b[0]+'" class="hint"></div>';
+          field('Actual cash (₱)','c_'+b[0],'',{num:1})+'<div id="d_'+b[0]+'" class="hint"></div>';
       }).join('');
   },
   function(d){
@@ -1079,10 +1079,11 @@ function ewEffects(kind,a,fee,mode){
 function ewForm(kind){
   var name={cashin:'Cash-in',cashout:'Cash-out',load:'Load & bills'}[kind],touched=false;
   var desc={cashin:'Customer gives you cash, you send e-money to their account.',cashout:'Customer sends e-money to your wallet, you give them cash.',load:'You pay load or a bill from your wallet, the customer pays you cash.'}[kind];
-  form(name,function(){return '<p class="hint" style="margin-top:0">'+desc+'</p>'+sel('Wallet','wid',walletOpts(),S.wallets[0]&&S.wallets[0].id)+field('Amount (₱)','amt','',{num:1})+
-    field('Your fee (₱)','fee','',{num:1})+'<div id="feehint" class="hint">Suggested fee: ₱0 (₱'+(S.store.feePer500||0)+' per ₱500 — change in Settings)</div>'+
-    sel('How is the fee handled?','mode',[['top','Added on top of the amount'],['deduct','Taken out of the amount']],kind==='cashout'?'deduct':'top')+
-    field('Customer / reference (optional)','note','')+'<div id="ewprev" class="note">Enter an amount to see how your cash and wallet change.</div>'},
+  form(name,function(){return '<p class="hint" style="margin-top:0">'+desc+'</p>'+sel('Which wallet?','wid',walletOpts(),S.wallets[0]&&S.wallets[0].id)+field('Transaction amount (₱)','amt','',{num:1})+
+    field('Fee you charge (₱)','fee','',{num:1})+'<div id="feehint" class="hint">Suggested fee: ₱0</div>'+
+    '<details class="moreopts"><summary>More options <span class="soft">how the fee is applied</span></summary><div class="morebody"><div class="moreintro">Most of the time you can leave this as the default.</div>'+
+    sel('How should the fee be charged?','mode',[['top','Customer pays the fee on top'],['deduct','Fee comes out of the amount']],kind==='cashout'?'deduct':'top')+'</div></details>'+
+    field('Customer name / reference (optional)','note','')+'<div id="ewprev" class="note">Enter the amount to see what changes.</div>'},
   function(d){
     var a=num(d.amt),fee=num(d.fee);if(a<=0){toast('Enter an amount');return false}
     if(d.mode==='deduct'&&fee>a){toast('The fee is bigger than the amount');return false}
@@ -1105,7 +1106,7 @@ function ewForm(kind){
   }});
 }
 function moveForm(){
-  form('Move money',function(){return sel('Direction','dir',[['fund','Drawer cash → e-wallet (top up)'],['withdraw','E-wallet → drawer cash (withdraw)']],'fund')+sel('Wallet','wid',walletOpts(),S.wallets[0]&&S.wallets[0].id)+field('Amount (₱)','amt','',{num:1})+field('Note (optional)','note','')},
+  form('Move money',function(){return sel('Where is the money going?','dir',[['fund','Cash box → e-wallet'],['withdraw','E-wallet → cash box']],'fund')+sel('Wallet','wid',walletOpts(),S.wallets[0]&&S.wallets[0].id)+field('Amount (₱)','amt','',{num:1})+field('Note (optional)','note','')},
   function(d){var a=num(d.amt);if(a<=0){toast('Enter an amount');return false}
     var f=d.dir==='fund';S.tx.push({id:uid(),ts:now(),type:'move',wid:d.wid,cash:f?-a:a,wal:f?a:-a,note:(d.note||'').trim()});save();toast('Moved '+fmt(a))});
 }
@@ -1219,36 +1220,42 @@ function checkout(){
 /* settings + backup */
 function settingsForm(){
   form('Settings',function(){return field('Store name','sname',S.store.name)+
-    '<div class="two">'+BIZ.map(function(b){return field('Starting cash — '+b[1]+' (₱)','op_'+b[0],(S.store.opening||{})[b[0]]||0,{num:1})}).join('')+'</div>'+
-    field('Fee per ₱500 (₱)','fee',S.store.feePer500,{num:1})+
-    '<div class="lbl">E-wallets — starting balance</div>'+S.wallets.map(function(w){return '<div class="two">'+field('Name','wn_'+w.id,w.name)+field('Balance (₱)','wo_'+w.id,w.opening,{num:1,neg:1})+'</div>'}).join('')+
-    field('Add another wallet (optional)','newwallet','',{ph:'e.g. Maya'})+
-    '<div class="note">Your data is saved in this browser on this device only. Back it up regularly so you never lose your records.</div>'+
-    '<div class="rowbtns" style="margin:.5rem 0 1rem"><button type="button" class="btn btn-sm" data-act="export">Back up data</button><button type="button" class="btn btn-sm" data-act="import">Restore backup</button><button type="button" class="btn btn-sm btn-red" data-act="reset">Erase everything</button></div>'+
-    '<div class="lbl">Syncing between devices</div>'+
+    '<div class="lbl">Sync between your devices</div>'+
     '<div class="note"><span class="syncdot '+(syOn()?'on':'')+'" id="syncdot"></span>'+
-      (syOn()?'On — '+esc(sy.shop.name)+(sy.last?', last synced '+esc(fdate(sy.last)):'')
-             :'Off. Each device keeps its own separate records.')+'</div>'+
+      (syOn()?'Connected to '+esc(sy.shop.name)+(sy.last?' · last synced '+esc(fdate(sy.last)):'')
+             :'Not connected. Each device currently keeps its own copy.')+'</div>'+
     '<div class="rowbtns" style="margin:.5rem 0 1rem">'+
-      (syOn()?'<button type="button" class="btn btn-sm btn-green" data-act="syncnow">Sync now</button><button type="button" class="btn btn-sm" data-act="sync">Shop &amp; join code</button>'
-             :'<button type="button" class="btn btn-sm btn-green" data-act="sync">Turn on syncing</button>')+'</div>'+
-    '<div class="lbl">PIN lock</div>'+
-    (hasCrypto()
-      ? '<div class="note">'+(crypt?'This device asks for a PIN before showing your records, and locks itself again after 5 minutes away.':'Anyone who opens this device can read and change your records.')+'</div>'+
-        '<div class="rowbtns" style="margin:.5rem 0 1rem">'+(crypt
-          ? '<button type="button" class="btn btn-sm" data-act="locknow">Lock now</button><button type="button" class="btn btn-sm" data-act="setpin">Change PIN</button><button type="button" class="btn btn-sm btn-red" data-act="rmpin">Remove PIN</button>'
-          : '<button type="button" class="btn btn-sm btn-red" data-act="setpin">Set a PIN</button>')+'</div>'
-      : '<div class="note">A PIN needs the app opened over https or from the installed icon.</div>')},
+      (syOn()?'<button type="button" class="btn btn-sm btn-green" data-act="syncnow">Sync now</button><button type="button" class="btn btn-sm" data-act="sync">Manage devices</button>'
+             :'<button type="button" class="btn btn-sm btn-green" data-act="sync">Connect devices</button>')+'</div>'+
+    '<details class="moreopts"><summary>Money & wallet setup <span class="soft">starting amounts · fees</span></summary><div class="morebody">'+
+      '<div class="moreintro">You normally only set these once.</div>'+
+      '<div class="two">'+BIZ.map(function(b){return field('Starting cash — '+b[1]+' (₱)','op_'+b[0],(S.store.opening||{})[b[0]]||0,{num:1})}).join('')+'</div>'+
+      field('Usual e-wallet fee per ₱500','fee',S.store.feePer500,{num:1})+
+      '<div class="lbl">Your e-wallets</div>'+S.wallets.map(function(w){return '<div class="two">'+field('Wallet name','wn_'+w.id,w.name)+field('Starting balance (₱)','wo_'+w.id,w.opening,{num:1,neg:1})+'</div>'}).join('')+
+      field('Add another wallet','newwallet','',{ph:'e.g. Maya'})+
+    '</div></details>'+
+    '<details class="moreopts"><summary>Backup & restore <span class="soft">keep a safety copy</span></summary><div class="morebody">'+
+      '<div class="moreintro">A backup gives you an extra copy of your records in case a device is lost or reset.</div>'+
+      '<div class="rowbtns"><button type="button" class="btn btn-sm" data-act="export">Save backup</button><button type="button" class="btn btn-sm" data-act="import">Restore backup</button><button type="button" class="btn btn-sm btn-red" data-act="reset">Erase everything</button></div>'+
+    '</div></details>'+
+    '<details class="moreopts"><summary>Privacy lock <span class="soft">optional PIN</span></summary><div class="morebody">'+
+      (hasCrypto()
+        ? '<div class="moreintro">'+(crypt?'This device is protected by a PIN and locks again after 5 minutes away.':'Optional: add a PIN so other people cannot open your records.')+'</div>'+
+          '<div class="rowbtns">'+(crypt
+            ? '<button type="button" class="btn btn-sm" data-act="locknow">Lock now</button><button type="button" class="btn btn-sm" data-act="setpin">Change PIN</button><button type="button" class="btn btn-sm btn-red" data-act="rmpin">Remove PIN</button>'
+            : '<button type="button" class="btn btn-sm" data-act="setpin">Add PIN</button>')+'</div>'
+        : '<div class="moreintro">PIN lock is available when Lucy Store is opened securely from https or the installed app.</div>')+
+    '</div></details>'},
   function(d){
     S.store.name=(d.sname||'').trim()||'Lucy Store';
     S.store.opening=S.store.opening||{};
     BIZ.forEach(function(b){S.store.opening[b[0]]=num(d['op_'+b[0]])});
-    S.store.openingCash=S.store.opening.store;   /* kept so an older copy of the app still reads it */
+    S.store.openingCash=S.store.opening.store;
     S.store.feePer500=num(d.fee);
     S.wallets.forEach(function(w){var n=(d['wn_'+w.id]||'').trim();if(n)w.name=n;w.opening=num(d['wo_'+w.id])});
     var nw=(d.newwallet||'').trim();if(nw)S.wallets.push({id:uid(),name:nw,opening:0});
     S.setup=true;save();toast('Settings saved');
-  });
+  },{label:'Save settings'});
 }
 function showText(title,text){
   openModal({title:title,body:function(){return '<p class="hint" style="margin-top:0">Copy all of this text and keep it somewhere safe (notes app, email to yourself).</p><textarea id="bk" rows="8" readonly>'+esc(text)+'</textarea>'},focus:false});
