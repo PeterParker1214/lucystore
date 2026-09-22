@@ -919,10 +919,9 @@ function itemForm(id,draft){
     return '<div class="basicnote">Just fill the basics. You can ignore <b>More options</b> unless this item has a barcode, is sold tingi/per kilo, or is also sold by pack/case.</div>'+
     '<div class="field"><label>Product photo <span class="soft">(optional)</span></label><div class="photobox">'+pp+'<div class="grow"><input id="itemphoto" type="file" accept="image/*" capture="environment"><div class="hint" id="photostatus">Take a clear photo of the front. Lucy can try to read the label and clean the background.</div>'+(itemPhotoDraft?'<div class="rowbtns"><button type="button" class="btn btn-sm" data-act="smartphoto">Fill from photo</button><button type="button" class="btn btn-sm" data-act="bgclean">Clean background</button><button type="button" class="btn btn-sm" data-act="photooriginal">Original</button><button type="button" class="btn btn-sm" data-act="clearphoto">Remove</button></div>':'')+'</div></div></div>'+
     field('Product name','name',v.name,{ph:'e.g. Piattos Cheese 85g'})+
-    '<div class="two">'+field('Selling price (₱)','price',v.price,{num:1,ph:'How much you charge'})+
-      (it?field('Your cost (₱)','cost',v.cost,{num:1,ph:'Optional'}):field('Stock now','start',v.start,{num:1,ph:'How many you have'}))+'</div>'+
-    (it?'<div class="two">'+field('Your cost (₱)','cost',v.cost,{num:1,ph:'What you paid; optional'})+field('Category','cat',v.cat,{list:'cats'})+'</div>':
-        '<div class="two">'+field('Your cost (₱)','cost',v.cost,{num:1,ph:'What you paid; optional'})+field('Category','cat',v.cat,{list:'cats'})+'</div>')+
+    '<div class="two">'+field('Selling price (₱)','price',v.price,{num:1,ph:'How much you charge'})+field('Your cost (₱)','cost',v.cost,{num:1,ph:'What you paid; optional'})+'</div>'+
+    (it?field('Category','cat',v.cat,{list:'cats'}):
+        '<div class="two">'+field('Stock now','start',v.start,{num:1,ph:'How many you have'})+field('Category','cat',v.cat,{list:'cats'})+'</div>')+
     '<details class="moreopts"'+(advanced?' open':'')+'><summary>More options <span class="soft">barcode · tingi · packs</span></summary><div class="morebody">'+
       '<div class="moreintro">Use these only when needed. Normal piece-by-piece products can stay with the defaults.</div>'+
       '<div class="field"><label for="f_codes">Barcode <span class="soft">(optional)</span></label><div style="display:flex;gap:.5rem"><input id="f_codes" name="codes" type="text" inputmode="numeric" value="'+esc(codes)+'" placeholder="Scan or type barcode" autocomplete="off" style="flex:1"><button type="button" class="btn" data-act="scanitem" data-id="'+(id||'')+'">'+ic('scan',18)+'Scan</button></div><div class="hint">Leave blank if the product has no barcode.</div></div>'+
