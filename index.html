@@ -163,6 +163,15 @@ input[type=checkbox]{width:auto;min-height:0;accent-color:var(--palm)}
 .prod .p{font-weight:800;color:var(--palm);font-variant-numeric:tabular-nums}
 .prod small{color:var(--soft);font-weight:600;font-size:.75rem}
 .prod.low small{color:var(--tomato);font-weight:800}
+.prod .pic{width:100%;aspect-ratio:1.2/1;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:10px;background:var(--bg);border:1.5px solid var(--line);margin-bottom:.35rem}
+.prod .pic img{width:100%;height:100%;object-fit:contain;display:block}
+.prod .pic .ph{font-size:1.9rem;opacity:.45}
+.itemthumb{width:58px;height:58px;flex:0 0 58px;border-radius:10px;overflow:hidden;background:var(--bg);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center}
+.itemthumb img{width:100%;height:100%;object-fit:contain}
+.itemthumb .ph{font-size:1.4rem;opacity:.4}
+.photobox{display:flex;align-items:center;gap:.7rem;margin:.25rem 0 .8rem}
+.photoprev{width:92px;height:92px;border:2px solid var(--edge);border-radius:12px;background:var(--bg);object-fit:contain}
+.photoph{width:92px;height:92px;border:2px dashed var(--line);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--soft);font-weight:800;text-align:center;font-size:.75rem}
 
 /* Cart bar + toast */
 #cartbar{position:fixed;left:0;right:0;bottom:calc(66px + env(safe-area-inset-bottom,0px));z-index:19;padding:0 .75rem;pointer-events:none}
@@ -331,7 +340,15 @@ function parseState(raw){
   if(!s||!Array.isArray(s.tx)||!Array.isArray(s.items))return null;
   var f=fresh();
   var o=Object.assign(f,s,{store:Object.assign(f.store,s.store||{})});
-  if(!Array.isArray(o.wallets)||!o.wallets.length)o.wallets=fresh().wallets;   /* a backup with no wallets used to crash checkout */
+  if(!Array.isArray(o.wallets)||!o.wallets.length)o.wallets=fresh().wallets;
+  o.items.forEach(function(i){
+    if(!Array.isArray(i.codes))i.codes=i.code?[String(i.code)]:[];
+    i.codes=i.codes.map(function(x){return String(x||'').trim()}).filter(Boolean).filter(function(x,n,a){return a.indexOf(x)===n});
+    if(!i.unit)i.unit='pc';
+    if(!i.buyUnit)i.buyUnit=i.unit;
+    if(!(num(i.packQty)>0))i.packQty=1;
+    if(i.fractional==null)i.fractional=/^(kg|g|gram|grams|l|liter|litre|ml)$/i.test(i.unit);
+  });   /* a backup with no wallets used to crash checkout */
   if(!o.store.opening){o.store.opening={store:+o.store.openingCash||0,billiard:0}}   /* one drawer became two */
   return o;
 }
@@ -392,6 +409,16 @@ var cart={lines:[],pay:'cash',sid:'',wid:'',given:'',note:''};
 var modal=null, C=null;
 
 function item(id){return S.items.find(function(i){return i.id===id})}
+function codesOf(i){
+  var a=Array.isArray(i&&i.codes)?i.codes.slice():[];
+  if(i&&i.code&&a.indexOf(String(i.code))<0)a.unshift(String(i.code));
+  return a.map(function(x){return String(x||'').trim()}).filter(Boolean);
+}
+function codeText(i){return codesOf(i).join(' ')}
+function itemPic(i,thumb){
+  if(i&&i.photo)return '<div class="'+(thumb?'itemthumb':'pic')+'"><img src="'+esc(i.photo)+'" alt=""></div>';
+  return '<div class="'+(thumb?'itemthumb':'pic')+'"><span class="ph">▧</span></div>';
+}
 function suki(id){return S.suki.find(function(s){return s.id===id})}
 function wallet(id){return S.wallets.find(function(w){return w.id===id})}
 function wname(id){var w=wallet(id);return w?w.name:'E-wallet'}
@@ -539,7 +566,7 @@ function txTitle(t){
 function txSub(t){
   var p=[fdate(t.ts)];
   if(t.type==='sale')p.push(t.sid?'On utang — '+sname(t.sid):t.wid?'Paid by '+wname(t.wid):'Cash');
-  if(t.type==='restock'&&t.lines&&t.lines[0])p.push(t.lines[0].qty+' × '+fmt(t.lines[0].cost));
+  if(t.type==='restock'&&t.lines&&t.lines[0]){var z=t.lines[0];p.push(z.qty+' '+(z.buyUnit||'unit')+' × '+fmt(z.cost)+(z.stockQty!=null?' → '+z.stockQty+' '+(z.unit||'units'):'') )}
   if(t.type==='ew'&&t.amount)p.push('Amount '+fmt(t.amount));
   if(t.note)p.push(t.note);
   return p.join(' · ');
@@ -615,13 +642,13 @@ function ageText(a){return a>=14?'Oldest utang: '+a+' days — overdue':a>=1?'Ol
 /* Sell */
 function productGrid(){
   var q=ui.sellQ.trim().toLowerCase();
-  var list=S.items.filter(function(i){return !q||i.name.toLowerCase().indexOf(q)>=0||(i.cat||'').toLowerCase().indexOf(q)>=0||(i.code||'').indexOf(q)>=0}).sort(function(a,b){return a.name.localeCompare(b.name)});
+  var list=S.items.filter(function(i){return !q||i.name.toLowerCase().indexOf(q)>=0||(i.cat||'').toLowerCase().indexOf(q)>=0||codeText(i).indexOf(q)>=0}).sort(function(a,b){return a.name.localeCompare(b.name)});
   if(!S.items.length)return empty('No items yet','Add your products first, or load sample items to try it out.','<button class="btn btn-green" data-act="additem">'+ic('plus',18)+'Add item</button> <button class="btn" data-act="sample">Load sample items</button>');
   if(!list.length)return empty('No match','Try another word, or ring it up as a custom item.');
   return '<div class="prods">'+list.map(function(i){
     var st=C.stock[i.id],lowc=!i.svc&&i.reorder>0&&st<=i.reorder;
     var sub=i.svc?'Per '+esc(i.unit||'game'):(st<=0?'Out of stock':st+' '+esc(i.unit||'left'));
-    return '<button class="prod'+(lowc?' low':'')+'" data-act="addcart" data-id="'+i.id+'"><b>'+esc(i.name)+'</b><span class="p">'+fmt(i.price)+'</span><small>'+sub+'</small></button>';
+    return '<button class="prod'+(lowc?' low':'')+'" data-act="addcart" data-id="'+i.id+'">'+itemPic(i,false)+'<b>'+esc(i.name)+'</b><span class="p">'+fmt(i.price)+' / '+esc(i.unit||'pc')+'</span><small>'+sub+'</small></button>';
   }).join('')+'</div>';
 }
 function viewSell(c){
@@ -643,7 +670,7 @@ function stockRows(c){
   var q=ui.stockQ.trim().toLowerCase();
   var list=S.items.filter(function(i){
     var st=c.stock[i.id];
-    if(q&&i.name.toLowerCase().indexOf(q)<0&&(i.cat||'').toLowerCase().indexOf(q)<0&&(i.code||'').indexOf(q)<0)return false;
+    if(q&&i.name.toLowerCase().indexOf(q)<0&&(i.cat||'').toLowerCase().indexOf(q)<0&&codeText(i).indexOf(q)<0)return false;
     if(ui.stockF==='low')return !i.svc&&i.reorder>0&&st<=i.reorder&&st>0;
     if(ui.stockF==='out')return !i.svc&&st<=0;
     return true;
@@ -653,7 +680,7 @@ function stockRows(c){
   return '<div class="list">'+list.map(function(i){
     var st=c.stock[i.id],margin=i.price-i.cost,mp=i.price>0?Math.round(margin/i.price*100):0;
     var stag=i.svc?tag('Service','b'):st<=0?tag('Out of stock','r'):(i.reorder>0&&st<=i.reorder)?tag('Low','s'):tag('OK','g');
-    return '<div class="li" style="align-items:flex-start"><div class="grow"><div class="t">'+esc(i.name)+' '+stag+'</div><div class="s">'+esc(i.cat||'')+' · Cost '+fmt(i.cost)+' · Price '+fmt(i.price)+' · Margin '+fmt(margin)+' ('+mp+'%)</div>'+
+    return '<div class="li" style="align-items:flex-start">'+itemPic(i,true)+'<div class="grow"><div class="t">'+esc(i.name)+' '+stag+'</div><div class="s">'+esc(i.cat||'')+' · Cost '+fmt(i.cost)+'/'+esc(i.unit||'pc')+' · Price '+fmt(i.price)+' · Margin '+fmt(margin)+' ('+mp+'%)</div>'+
       '<div class="rowbtns">'+(i.svc?'':'<button class="btn btn-sm btn-green" data-act="restock" data-id="'+i.id+'">Restock</button><button class="btn btn-sm" data-act="adjstock" data-id="'+i.id+'">Adjust</button>')+'<button class="btn btn-sm" data-act="edititem" data-id="'+i.id+'">Edit</button></div></div>'+
       '<div class="amt num" style="font-size:1.25rem">'+(i.svc?'—':(+st.toFixed(2))+'<div class="s" style="font-weight:600">'+esc(i.unit||'pcs')+'</div>')+'</div></div>'}).join('')+'</div>';
 }
@@ -805,41 +832,54 @@ function ask(msg,label,fn,reopen){openModal({title:'Please confirm',body:functio
 function fd(){var f=$('#mform');return f?Object.fromEntries(new FormData(f)):{}}
 
 /* ---------- forms ---------- */
+var itemPhotoDraft='';
 function itemForm(id,draft){
-  var it=id?item(id):null,v=draft||it||{name:'',cat:'Groceries',unit:'pc',cost:'',price:'',start:'',reorder:5,code:''};
-  form(it?'Edit item':'Add item',function(){return field('Item name','name',v.name,{ph:'e.g. Instant pancit canton'})+
-    '<div class="field"><label for="f_code">Barcode (optional)</label><div style="display:flex;gap:.5rem"><input id="f_code" name="code" type="text" inputmode="numeric" value="'+esc(v.code||'')+'" placeholder="Scan or type" autocomplete="off" style="flex:1"><button type="button" class="btn" data-act="scanitem" data-id="'+(id||'')+'">'+ic('scan',18)+'Scan</button></div><div class="hint">Scan it once and this item rings itself up at the counter.</div></div>'+
-    '<div class="two">'+field('Category','cat',v.cat,{list:'cats'})+field('Sold per','unit',v.unit,{ph:'pc, kg, sachet'})+'</div>'+
-    '<div class="two">'+field('Cost price (₱)','cost',v.cost,{num:1})+field('Selling price (₱)','price',v.price,{num:1})+'</div>'+
+  var it=id?item(id):null,v=draft||it||{name:'',cat:'Groceries',unit:'pc',buyUnit:'pc',packQty:1,cost:'',price:'',start:'',reorder:5,codes:[],photo:'',fractional:false};
+  itemPhotoDraft=(v.photo!==undefined?v.photo:(it&&it.photo)||'')||'';
+  var codes=(v.codes!==undefined?v.codes:codesOf(v)).toString();
+  form(it?'Edit item':'Add item',function(){
+    var pp=itemPhotoDraft?'<img id="itemphotoprev" class="photoprev" src="'+esc(itemPhotoDraft)+'" alt="Product photo">':'<div id="itemphotoprev" class="photoph">No photo yet</div>';
+    return field('Item name','name',v.name,{ph:'e.g. Piattos Cheese 85g'})+
+    '<div class="field"><label>Product photo</label><div class="photobox">'+pp+'<div class="grow"><input id="itemphoto" type="file" accept="image/*" capture="environment"><div class="hint">Take or choose a clear product photo. Lucy compresses it before saving.</div>'+(itemPhotoDraft?'<button type="button" class="btn btn-sm" data-act="clearphoto" style="margin-top:.35rem">Remove photo</button>':'')+'</div></div></div>'+
+    '<div class="field"><label for="f_codes">Accepted barcodes (optional)</label><div style="display:flex;gap:.5rem"><input id="f_codes" name="codes" type="text" inputmode="numeric" value="'+esc(codes)+'" placeholder="Scan one, or separate several with commas" autocomplete="off" style="flex:1"><button type="button" class="btn" data-act="scanitem" data-id="'+(id||'')+'">'+ic('scan',18)+'Scan</button></div><div class="hint">No barcode is fine. Multiple barcodes can point to this same product.</div></div>'+
+    '<div class="two">'+field('Category','cat',v.cat,{list:'cats'})+field('Sold per','unit',v.unit,{ph:'pc, stick, sachet, kg'})+'</div>'+
+    '<div class="two">'+field('Bought / restocked by','buyUnit',v.buyUnit||v.unit||'pc',{ph:'pack, bag, case, kg'})+field('Sell units in 1 purchase unit','packQty',v.packQty||1,{num:1})+'</div>'+
+    '<div class="hint">Tingi example: cigarettes = sold per <b>stick</b>, bought by <b>pack</b>, 20 sticks per pack. Candy = sold per <b>pc</b>, bought by <b>bag</b>, e.g. 100 pcs per bag.</div>'+
+    '<div class="two">'+field('Cost per selling unit (₱)','cost',v.cost,{num:1})+field('Selling price per '+esc(v.unit||'unit')+' (₱)','price',v.price,{num:1})+'</div>'+
     sel('Which business?','biz',BIZ,v.biz||'store')+
+    '<label class="check"><input type="checkbox" name="fractional" value="1"'+(v.fractional?' checked':'')+'> Allow decimal quantities (for kg, grams, liters, etc.)</label>'+
     '<label class="check"><input type="checkbox" name="svc" value="1"'+(v.svc?' checked':'')+'> This is a service, not a product (no stock to count)</label>'+
-    '<div class="two">'+(it?'':field('Stock on hand now','start',v.start,{num:1}))+field('Reorder when stock ≤','reorder',v.reorder,{num:1})+'</div>'+
-    '<div class="hint">Tick the box for things like a billiard game, a haircut or a photocopy — it sells and earns like any item, but nothing is deducted from a shelf.</div>'+
+    '<div class="two">'+(it?'':field('Stock on hand now ('+esc(v.unit||'units')+')','start',v.start,{num:1}))+field('Reorder when stock ≤','reorder',v.reorder,{num:1})+'</div>'+
+    '<div class="hint">Stock is always counted in the unit you sell. Restocking converts packs, bags or cases into those sellable units automatically.</div>'+
     '<datalist id="cats">'+CATS.map(function(c){return '<option value="'+c+'">'}).join('')+'</datalist>'+
     (it?'<button type="button" class="btn btn-red btn-sm" data-act="delitem" data-id="'+id+'">Delete item</button>':'')},
   function(d){
     var name=(d.name||'').trim();if(!name){toast('Enter an item name');return false}
     if(num(d.price)<=0){toast('Enter a selling price');return false}
-    var code=(d.code||'').trim(),clash=code?itemByCode(code):null;
-    if(clash&&(!it||clash.id!==it.id)){toast('That barcode is already on '+clash.name);return false}
-    var o={name:name,cat:(d.cat||'Other').trim(),unit:(d.unit||'pc').trim(),cost:num(d.cost),price:num(d.price),reorder:num(d.reorder),code:code,svc:!!d.svc,biz:d.biz||'store'};
+    var codes=String(d.codes||'').split(/[\s,;]+/).map(function(x){return x.trim()}).filter(Boolean).filter(function(x,n,a){return a.indexOf(x)===n});
+    for(var k=0;k<codes.length;k++){var clash=itemByCode(codes[k]);if(clash&&(!it||clash.id!==it.id)){toast('Barcode '+codes[k]+' is already on '+clash.name);return false}}
+    var pq=num(d.packQty)||1;if(pq<=0)pq=1;
+    var o={name:name,cat:(d.cat||'Other').trim(),unit:(d.unit||'pc').trim(),buyUnit:(d.buyUnit||d.unit||'pc').trim(),packQty:pq,cost:num(d.cost),price:num(d.price),reorder:num(d.reorder),codes:codes,code:codes[0]||'',photo:itemPhotoDraft,fractional:!!d.fractional,svc:!!d.svc,biz:d.biz||'store'};
     if(it)Object.assign(it,o);else S.items.push(Object.assign({id:uid(),start:num(d.start)},o));
     save();toast(it?'Item updated':'Item added');
   });
 }
 function restockForm(id){
   var it=item(id);if(!it)return;
-  form('Restock — '+it.name,function(){return '<div class="two">'+field('Quantity bought','qty','',{num:1})+field('Cost each (₱)','cost',it.cost||'',{num:1})+'</div>'+
-    '<div id="rtotal" class="hint">Total: ₱0</div>'+
-    sel('Which business?','biz',BIZ,'store')+sel('Paid from','from',[['cash','Cash drawer']].concat(walletOpts().map(function(w){return ['w:'+w[0],w[1]]})).concat([['none','Not from my records (own pocket / on credit)']]),'cash')+
-    '<label class="check"><input type="checkbox" name="upd" value="1" checked> Update this item\'s cost price</label>'+field('Note (optional)','note','')},
+  var mult=num(it.packQty)||1,bu=it.buyUnit||it.unit||'unit',su=it.unit||'unit';
+  form('Restock — '+it.name,function(){return '<p class="hint" style="margin-top:0">1 '+esc(bu)+' = <b>'+mult+' '+esc(su)+'</b>. Stock will be added in '+esc(su)+'.</p>'+
+    '<div class="two">'+field('Number of '+bu+' bought','qty','',{num:1})+field('Cost per '+bu+' (₱)','cost',it.cost? r2(it.cost*mult):'',{num:1})+'</div>'+
+    '<div id="rtotal" class="hint">Stock added: 0 '+esc(su)+' · Total: ₱0</div>'+
+    sel('Which business?','biz',BIZ,it.biz||'store')+sel('Paid from','from',[['cash','Cash drawer']].concat(walletOpts().map(function(w){return ['w:'+w[0],w[1]]})).concat([['none','Not from my records (own pocket / on credit)']]),'cash')+
+    '<label class="check"><input type="checkbox" name="upd" value="1" checked> Recalculate cost per '+esc(su)+' from this purchase</label>'+field('Note (optional)','note','')},
   function(d){
-    var q=num(d.qty),cost=num(d.cost);if(q<=0){toast('Enter the quantity bought');return false}
-    var total=r2(q*cost),t={id:uid(),ts:now(),type:'restock',lines:[{iid:id,name:it.name,qty:q,cost:cost}],stk:[{iid:id,q:q}],purch:total,note:(d.note||'').trim()};
+    var q=num(d.qty),cost=num(d.cost);if(q<=0){toast('Enter how many '+bu+' you bought');return false}
+    var add=r2(q*mult),total=r2(q*cost),unitCost=mult?cost/mult:cost;
+    var t={id:uid(),ts:now(),type:'restock',lines:[{iid:id,name:it.name,qty:q,cost:cost,buyUnit:bu,stockQty:add,unit:su}],stk:[{iid:id,q:add}],purch:total,note:(d.note||'').trim()};
     if(d.from==='cash')t.cash=-total;else if(d.from&&d.from.indexOf('w:')===0){t.wid=d.from.slice(2);t.wal=-total}
-    if(d.upd&&cost>0)it.cost=cost;
-    t.biz=it.biz||'store';S.tx.push(t);save();toast('Restocked '+it.name);
-  },{hook:function(){var d=fd();var e=$('#rtotal');if(e)e.textContent='Total: '+fmt(num(d.qty)*num(d.cost))}});
+    if(d.upd&&cost>0)it.cost=r2(unitCost);
+    t.biz=it.biz||'store';S.tx.push(t);save();toast('Added '+add+' '+su+' to stock');
+  },{hook:function(){var d=fd(),q=num(d.qty),cost=num(d.cost),e=$('#rtotal');if(e)e.textContent='Stock added: '+r2(q*mult)+' '+su+' · Total: '+fmt(q*cost)}});
 }
 function adjustForm(id){
   var it=item(id);if(!it)return;
@@ -986,13 +1026,20 @@ function customForm(){
   function(d){var p=num(d.price),q=num(d.qty)||1;if(p<=0){toast('Enter a price');return false}
     cart.lines.push({iid:null,name:(d.name||'').trim()||'Custom item',price:p,cost:num(d.cost),qty:q});toast('Added to cart')},{label:'Add to cart',cls:'btn-red'});
 }
-function addCart(id){
-  var it=item(id);if(!it)return;var l=cart.lines.find(function(x){return x.iid===id});
-  if(l)l.qty+=1;else cart.lines.push({iid:id,name:it.name,price:it.price,cost:it.cost,qty:1});
+function addCart(id,qty){
+  var it=item(id);if(!it)return;qty=qty==null?1:num(qty);if(qty<=0)return;
+  var l=cart.lines.find(function(x){return x.iid===id});
+  if(l)l.qty=r2(l.qty+qty);else cart.lines.push({iid:id,name:it.name,price:it.price,cost:it.cost,qty:r2(qty),unit:it.unit||'pc',step:it.fractional?.1:1});
   renderCartBar();
 }
+function quantityForm(id){
+  var it=item(id);if(!it)return;
+  form('How much — '+it.name,function(){return '<p class="hint" style="margin-top:0">Price: <b>'+fmt(it.price)+' per '+esc(it.unit||'unit')+'</b></p>'+field('Quantity ('+(it.unit||'unit')+')','qty','',{num:1,ph:'e.g. 0.25'})},
+    function(d){var q=num(d.qty);if(q<=0){toast('Enter the quantity');return false}addCart(id,q);toast('Added '+q+' '+(it.unit||'unit'))},
+    {label:'Add to cart',cls:'btn-green'});
+}
 function cartBody(){
-  var lines=cart.lines.map(function(l,i){return '<div class="cl"><div class="n"><b>'+esc(l.name)+'</b><small>'+fmt(l.price)+' each</small></div><div class="qty"><button type="button" class="btn btn-sm" data-act="cminus" data-id="'+i+'" aria-label="Less">−</button><input type="number" inputmode="decimal" step="any" min="0" value="'+l.qty+'" data-q="'+i+'" aria-label="Quantity of '+esc(l.name)+'"><button type="button" class="btn btn-sm" data-act="cplus" data-id="'+i+'" aria-label="More">+</button></div><div class="ct num" id="lt'+i+'">'+fmt(l.price*l.qty)+'</div></div>'}).join('');
+  var lines=cart.lines.map(function(l,i){return '<div class="cl"><div class="n"><b>'+esc(l.name)+'</b><small>'+fmt(l.price)+' / '+esc(l.unit||'unit')+'</small></div><div class="qty"><button type="button" class="btn btn-sm" data-act="cminus" data-id="'+i+'" aria-label="Less">−</button><input type="number" inputmode="decimal" step="any" min="0" value="'+l.qty+'" data-q="'+i+'" aria-label="Quantity of '+esc(l.name)+'"><button type="button" class="btn btn-sm" data-act="cplus" data-id="'+i+'" aria-label="More">+</button></div><div class="ct num" id="lt'+i+'">'+fmt(l.price*l.qty)+'</div></div>'}).join('');
   var tot=cartTotal(),h='<div>'+(lines||empty('Cart is empty','Tap items to add them.'))+'</div><div class="sum"><span>Total</span><span class="v num" id="ctotal">'+fmt(tot)+'</span></div>';
   h+='<div class="lbl">Customer pays with</div><div class="paytabs" role="group" aria-label="Payment method">'+[['cash','Cash'],['utang','Utang'],['wallet','E-wallet']].map(function(p){return '<button type="button" class="btn" data-act="cpay" data-id="'+p[0]+'" aria-pressed="'+(cart.pay===p[0])+'">'+p[1]+'</button>'}).join('')+'</div>';
   if(cart.pay==='cash')h+=field('Cash received (optional)','given',cart.given,{num:1})+'<div id="change" class="hint"></div>';
@@ -1189,7 +1236,7 @@ function helpSheet(){openModal({title:'How to use Lucy Store',body:helpBody,focu
 /* ---------- actions ---------- */
 /* ---------- barcode scanning ---------- */
 var scan={stream:null,track:null,reader:null,timer:null,busy:false,last:'',lastT:0,mode:null,ac:null,hits:[]};
-function itemByCode(c){c=String(c||'').trim();if(!c)return null;for(var i=0;i<S.items.length;i++){if((S.items[i].code||'')===c)return S.items[i]}return null}
+function itemByCode(c){c=String(c||'').trim();if(!c)return null;for(var i=0;i<S.items.length;i++){if(codesOf(S.items[i]).indexOf(c)>=0)return S.items[i]}return null}
 function stopScan(){
   try{if(scan.reader&&scan.reader.reset)scan.reader.reset()}catch(e){}
   if(scan.timer){clearInterval(scan.timer);scan.timer=null}
@@ -1309,12 +1356,12 @@ function unknownCode(code){
       (S.items.length?'<button type="button" class="btn" data-act="codelink" data-id="'+esc(code)+'">Link to an item I already have</button>':'')+'</div>'}});
 }
 function linkCodeForm(code){
-  form('Link barcode '+code,function(){return sel('Which item is this?','iid',S.items.slice().sort(function(a,b){return a.name.localeCompare(b.name)}).map(function(i){return [i.id,i.name+(i.code?' (has a barcode already)':'')]}),'')+
-    '<div class="hint">Next time you scan this barcode it rings up straight away.</div>'},
+  form('Link barcode '+code,function(){return sel('Which item is this?','iid',S.items.slice().sort(function(a,b){return a.name.localeCompare(b.name)}).map(function(i){return [i.id,i.name+(codesOf(i).length?' ('+codesOf(i).length+' barcode'+(codesOf(i).length===1?'':'s')+')':'')]}),'')+
+    '<div class="hint">This adds another accepted barcode; it does not replace the item\'s existing codes.</div>'},
   function(d){
     var it=item(d.iid);if(!it){toast('Pick an item');return false}
     var clash=itemByCode(code);if(clash&&clash.id!==it.id){toast('That barcode is already on '+clash.name);return false}
-    it.code=code;save();toast('Linked to '+it.name);
+    var a=codesOf(it);if(a.indexOf(code)<0)a.push(code);it.codes=a;it.code=a[0]||'';save();toast('Linked to '+it.name);
   });
 }
 function gunHit(code,onStock){
@@ -1383,15 +1430,16 @@ var ACT={
   sample:function(){loadSample()},
   scansell:function(){sellScanner()},
   scanstock:function(){openScanner({title:'Scan an item',on:function(code){var it=itemByCode(code);stopScan();closeModal();if(it)restockForm(it.id);else unknownCode(code)}})},
-  scanitem:function(id){var d=fd();openScanner({title:'Scan item barcode',on:function(code){stopScan();d.code=code;setTimeout(function(){closeModal();itemForm(id||null,d)},0)}})},
-  codenew:function(code){closeModal();itemForm(null,{name:'',cat:'Groceries',unit:'pc',cost:'',price:'',start:'',reorder:5,code:code})},
+  scanitem:function(id){var d=fd();d.photo=itemPhotoDraft;openScanner({title:'Scan item barcode',on:function(code){stopScan();var a=String(d.codes||'').split(/[\s,;]+/).filter(Boolean);if(a.indexOf(code)<0)a.push(code);d.codes=a.join(', ');setTimeout(function(){closeModal();itemForm(id||null,d)},0)}})},
+  clearphoto:function(id){itemPhotoDraft='';var p=$('#itemphotoprev');if(p){p.outerHTML='<div id="itemphotoprev" class="photoph">No photo yet</div>'}},
+  codenew:function(code){closeModal();itemForm(null,{name:'',cat:'Groceries',unit:'pc',buyUnit:'pc',packQty:1,cost:'',price:'',start:'',reorder:5,codes:[code],photo:'',fractional:false})},
   codelink:function(code){closeModal();linkCodeForm(code)},
   stockf:function(id){ui.stockF=id;render()},
-  addcart:function(id){addCart(id)},
+  addcart:function(id){var it=item(id);if(it&&it.fractional)quantityForm(id);else addCart(id)},
   custom:function(){customForm()},
   cartopen:function(){openCart()},
-  cplus:function(i){cart.lines[+i].qty=r2(cart.lines[+i].qty+1);drawModal();patchCart()},
-  cminus:function(i){var l=cart.lines[+i];l.qty=r2(l.qty-1);if(l.qty<=0)cart.lines.splice(+i,1);if(!cart.lines.length){closeModal();return}drawModal();patchCart()},
+  cplus:function(i){var l=cart.lines[+i];l.qty=r2(l.qty+(l.step||1));drawModal();patchCart()},
+  cminus:function(i){var l=cart.lines[+i];l.qty=r2(l.qty-(l.step||1));if(l.qty<=0)cart.lines.splice(+i,1);if(!cart.lines.length){closeModal();return}drawModal();patchCart()},
   cpay:function(id){cart.pay=id;drawModal();patchCart()},
   cnewsuki:function(){sukiForm(null,function(nid){if(nid)cart.sid=nid;openCart()})},
   suki:function(id){openSuki(id)},
@@ -1448,6 +1496,23 @@ function onField(e){
 }
 document.addEventListener('input',onField);
 document.addEventListener('change',function(e){if(e.target&&e.target.tagName==='SELECT')onField(e)});
+document.addEventListener('change',function(e){
+  var t=e.target;if(!t||t.id!=='itemphoto'||!t.files||!t.files[0])return;
+  var file=t.files[0];if(!/^image\//.test(file.type||'')){toast('Choose an image file');return}
+  var r=new FileReader();
+  r.onload=function(){
+    var im=new Image();
+    im.onload=function(){
+      var max=420,scale=Math.min(max/im.width,max/im.height,1),w=Math.max(1,Math.round(im.width*scale)),h=Math.max(1,Math.round(im.height*scale));
+      var cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(im,0,0,w,h);
+      itemPhotoDraft=cv.toDataURL('image/jpeg',.78);
+      var p=$('#itemphotoprev');if(p)p.outerHTML='<img id="itemphotoprev" class="photoprev" src="'+esc(itemPhotoDraft)+'" alt="Product photo">';
+      toast('Photo ready');
+    };
+    im.onerror=function(){toast('Could not read that image')};im.src=String(r.result||'');
+  };
+  r.onerror=function(){toast('Could not read that image')};r.readAsDataURL(file);
+});
 document.addEventListener('change',function(e){
   var t=e.target;if(!t||t.id!=='bkfile'||!t.files||!t.files[0])return;
   var r=new FileReader();
