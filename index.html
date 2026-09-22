@@ -177,6 +177,15 @@ input[type=checkbox]{width:auto;min-height:0;accent-color:var(--palm)}
 .photobox{display:flex;align-items:center;gap:.7rem;margin:.25rem 0 .8rem}
 .photoprev{width:92px;height:92px;border:2px solid var(--edge);border-radius:12px;background:var(--bg);object-fit:contain}
 .photoph{width:92px;height:92px;border:2px dashed var(--line);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--soft);font-weight:800;text-align:center;font-size:.75rem}
+.moreopts{margin-top:.8rem;border:2px solid var(--line);border-radius:14px;background:var(--field);overflow:hidden}
+.moreopts summary{list-style:none;cursor:pointer;padding:.85rem 1rem;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:.7rem;touch-action:manipulation}
+.moreopts summary::-webkit-details-marker{display:none}
+.moreopts summary:after{content:'＋';font-size:1.15rem}
+.moreopts[open] summary:after{content:'−'}
+.moreopts .morebody{padding:0 1rem 1rem;border-top:1.5px solid var(--line)}
+.moreopts .moreintro{font-size:.84rem;color:var(--soft);line-height:1.4;margin:.75rem 0}
+.basicnote{font-size:.84rem;color:var(--soft);margin:-.25rem 0 .75rem;line-height:1.4}
+
 
 /* Cart bar + toast */
 #cartbar{position:fixed;left:0;right:0;bottom:calc(66px + env(safe-area-inset-bottom,0px));z-index:19;padding:0 .75rem;pointer-events:none}
@@ -906,46 +915,51 @@ function itemForm(id,draft){
   var codes=(v.codes!==undefined?v.codes:codesOf(v)).toString();
   form(it?'Edit item':'Add item',function(){
     var pp=itemPhotoDraft?'<img id="itemphotoprev" class="photoprev" src="'+esc(itemPhotoDraft)+'" alt="Product photo">':'<div id="itemphotoprev" class="photoph">No photo yet</div>';
-    return field('Item name','name',v.name,{ph:'e.g. Piattos Cheese 85g'})+
-    '<div class="field"><label>Product photo</label><div class="photobox">'+pp+'<div class="grow"><input id="itemphoto" type="file" accept="image/*" capture="environment"><div class="hint" id="photostatus">Take or choose a clear front-facing photo. Lucy reads visible package text, checks any barcode it finds, and then removes the background with AI.</div>'+(itemPhotoDraft?'<div class="rowbtns"><button type="button" class="btn btn-sm" data-act="bgclean">Remove background</button><button type="button" class="btn btn-sm" data-act="photooriginal">Use original</button><button type="button" class="btn btn-sm" data-act="smartphoto">Smart Fill</button><button type="button" class="btn btn-sm" data-act="clearphoto">Remove photo</button></div>':'')+'</div></div></div>'+
-    '<div class="field"><label for="f_codes">Accepted barcodes (optional)</label><div style="display:flex;gap:.5rem"><input id="f_codes" name="codes" type="text" inputmode="numeric" value="'+esc(codes)+'" placeholder="Scan one, or separate several with commas" autocomplete="off" style="flex:1"><button type="button" class="btn" data-act="scanitem" data-id="'+(id||'')+'">'+ic('scan',18)+'Scan</button></div><div class="hint">No barcode is fine. Multiple barcodes can point to this same product.</div></div>'+
-    '<div class="two">'+field('Category','cat',v.cat,{list:'cats'})+field('Sold per','unit',v.unit,{ph:'pc, stick, sachet, kg'})+'</div>'+
-    '<div class="two">'+field('Bought / restocked by','buyUnit',v.buyUnit||v.unit||'pc',{ph:'pack, bag, case, kg'})+field('Sell units in 1 purchase unit','packQty',v.packQty||1,{num:1})+'</div>'+
-    '<div class="hint">Tingi example: cigarettes = sold per <b>stick</b>, bought by <b>pack</b>, 20 sticks per pack. Candy = sold per <b>pc</b>, bought by <b>bag</b>, e.g. 100 pcs per bag.</div>'+
-    '<div class="two">'+field('Cost per selling unit (₱)','cost',v.cost,{num:1})+field('Selling price per '+esc(v.unit||'unit')+' (₱)','price',v.price,{num:1})+'</div>'+
-    '<div class="lbl">Other ways you sell the same stock</div>'+
-    '<div class="hint">Optional. Example: base unit = stick at ₱10; Pack = 20 sticks for ₱180. Selling a pack deducts 20 sticks from the same inventory.</div>'+
-    '<div class="two">'+field('Option 2 name','opt1label',(v.sellOpts&&v.sellOpts[0]&&v.sellOpts[0].label)||'',{ph:'e.g. pack'})+field('Base units in option 2','opt1qty',(v.sellOpts&&v.sellOpts[0]&&v.sellOpts[0].qty)||'',{num:1})+'</div>'+
-    field('Option 2 selling price (₱)','opt1price',(v.sellOpts&&v.sellOpts[0]&&v.sellOpts[0].price)||'',{num:1})+
-    '<div class="two">'+field('Option 3 name','opt2label',(v.sellOpts&&v.sellOpts[1]&&v.sellOpts[1].label)||'',{ph:'e.g. carton'})+field('Base units in option 3','opt2qty',(v.sellOpts&&v.sellOpts[1]&&v.sellOpts[1].qty)||'',{num:1})+'</div>'+
-    field('Option 3 selling price (₱)','opt2price',(v.sellOpts&&v.sellOpts[1]&&v.sellOpts[1].price)||'',{num:1})+
-    sel('Which business?','biz',BIZ,v.biz||'store')+
-    '<label class="check"><input type="checkbox" name="fractional" value="1"'+(v.fractional?' checked':'')+'> Allow decimal quantities (for kg, grams, liters, etc.)</label>'+
-    '<label class="check"><input type="checkbox" name="svc" value="1"'+(v.svc?' checked':'')+'> This is a service, not a product (no stock to count)</label>'+
-    '<div class="two">'+(it?'':field('Stock on hand now ('+esc(v.unit||'units')+')','start',v.start,{num:1}))+field('Reorder when stock ≤','reorder',v.reorder,{num:1})+'</div>'+
-    '<div class="hint">Stock is always counted in the unit you sell. Restocking converts packs, bags or cases into those sellable units automatically.</div>'+
+    var advanced=!!(codes||(v.unit&&v.unit!=='pc')||(v.buyUnit&&v.buyUnit!==(v.unit||'pc'))||num(v.packQty)>1||v.fractional||v.svc||(v.sellOpts&&v.sellOpts.length)||v.biz==='billiard'||(num(v.reorder)!==5&&num(v.reorder)!==0));
+    return '<div class="basicnote">Just fill the basics. You can ignore <b>More options</b> unless this item has a barcode, is sold tingi/per kilo, or is also sold by pack/case.</div>'+
+    '<div class="field"><label>Product photo <span class="soft">(optional)</span></label><div class="photobox">'+pp+'<div class="grow"><input id="itemphoto" type="file" accept="image/*" capture="environment"><div class="hint" id="photostatus">Take a clear photo of the front. Lucy can try to read the label and clean the background.</div>'+(itemPhotoDraft?'<div class="rowbtns"><button type="button" class="btn btn-sm" data-act="smartphoto">Fill from photo</button><button type="button" class="btn btn-sm" data-act="bgclean">Clean background</button><button type="button" class="btn btn-sm" data-act="photooriginal">Original</button><button type="button" class="btn btn-sm" data-act="clearphoto">Remove</button></div>':'')+'</div></div></div>'+
+    field('Product name','name',v.name,{ph:'e.g. Piattos Cheese 85g'})+
+    '<div class="two">'+field('Selling price (₱)','price',v.price,{num:1,ph:'How much you charge'})+
+      (it?field('Your cost (₱)','cost',v.cost,{num:1,ph:'Optional'}):field('Stock now','start',v.start,{num:1,ph:'How many you have'}))+'</div>'+
+    (it?'<div class="two">'+field('Your cost (₱)','cost',v.cost,{num:1,ph:'What you paid; optional'})+field('Category','cat',v.cat,{list:'cats'})+'</div>':
+        '<div class="two">'+field('Your cost (₱)','cost',v.cost,{num:1,ph:'What you paid; optional'})+field('Category','cat',v.cat,{list:'cats'})+'</div>')+
+    '<details class="moreopts"'+(advanced?' open':'')+'><summary>More options <span class="soft">barcode · tingi · packs</span></summary><div class="morebody">'+
+      '<div class="moreintro">Use these only when needed. Normal piece-by-piece products can stay with the defaults.</div>'+
+      '<div class="field"><label for="f_codes">Barcode <span class="soft">(optional)</span></label><div style="display:flex;gap:.5rem"><input id="f_codes" name="codes" type="text" inputmode="numeric" value="'+esc(codes)+'" placeholder="Scan or type barcode" autocomplete="off" style="flex:1"><button type="button" class="btn" data-act="scanitem" data-id="'+(id||'')+'">'+ic('scan',18)+'Scan</button></div><div class="hint">Leave blank if the product has no barcode.</div></div>'+
+      '<div class="two">'+field('How do you sell it?','unit',v.unit||'pc',{ph:'pc, stick, sachet, kg'})+field('How do you restock it?','buyUnit',v.buyUnit||v.unit||'pc',{ph:'pc, pack, bag, case'})+'</div>'+
+      field('How many selling units are in one restock unit?','packQty',v.packQty||1,{num:1,ph:'Example: 20 sticks in 1 pack'})+
+      '<div class="hint">Example: cigarettes → sell by <b>stick</b>, restock by <b>pack</b>, enter <b>20</b>. Candy → sell by <b>pc</b>, restock by <b>bag</b>, enter how many pieces are in the bag.</div>'+
+      '<div class="lbl" style="margin-top:.9rem">Also sell it another way? <span class="soft">(optional)</span></div>'+
+      '<div class="hint">Example: sell cigarettes as single sticks and also as a whole pack for a different price.</div>'+
+      '<div class="two">'+field('Other size/name','opt1label',(v.sellOpts&&v.sellOpts[0]&&v.sellOpts[0].label)||'',{ph:'e.g. pack'})+field('How many base units?','opt1qty',(v.sellOpts&&v.sellOpts[0]&&v.sellOpts[0].qty)||'',{num:1,ph:'e.g. 20'})+'</div>'+
+      field('Price for that option (₱)','opt1price',(v.sellOpts&&v.sellOpts[0]&&v.sellOpts[0].price)||'',{num:1})+
+      '<div class="two">'+field('One more size/name','opt2label',(v.sellOpts&&v.sellOpts[1]&&v.sellOpts[1].label)||'',{ph:'e.g. case'})+field('How many base units?','opt2qty',(v.sellOpts&&v.sellOpts[1]&&v.sellOpts[1].qty)||'',{num:1})+'</div>'+
+      field('Price for that option (₱)','opt2price',(v.sellOpts&&v.sellOpts[1]&&v.sellOpts[1].price)||'',{num:1})+
+      sel('Where does this sale belong?','biz',BIZ,v.biz||'store')+
+      '<label class="check"><input type="checkbox" name="fractional" value="1"'+(v.fractional?' checked':'')+'> Customers can buy part of a unit (example: 0.25 kg)</label>'+
+      '<label class="check"><input type="checkbox" name="svc" value="1"'+(v.svc?' checked':'')+'> This is a service, not physical stock</label>'+
+      field('Low-stock warning at','reorder',v.reorder,{num:1,ph:'Lucy warns you at this amount'})+
+    '</div></details>'+
     '<datalist id="cats">'+CATS.map(function(c){return '<option value="'+c+'">'}).join('')+'</datalist>'+
-    (it?'<button type="button" class="btn btn-red btn-sm" data-act="delitem" data-id="'+id+'">Delete item</button>':'')},
+    (it?'<button type="button" class="btn btn-red btn-sm" data-act="delitem" data-id="'+id+'" style="margin-top:.9rem">Delete item</button>':'')},
   function(d){
-    var name=(d.name||'').trim();if(!name){toast('Enter an item name');return false}
-    if(num(d.price)<=0){toast('Enter a selling price');return false}
+    var name=(d.name||'').trim();if(!name){toast('Enter the product name');return false}
+    if(num(d.price)<=0){toast('Enter the selling price');return false}
     var codes=String(d.codes||'').split(/[\s,;]+/).map(function(x){return x.trim()}).filter(Boolean).filter(function(x,n,a){return a.indexOf(x)===n});
-    for(var k=0;k<codes.length;k++){var clash=itemByCode(codes[k]);if(clash&&(!it||clash.id!==it.id)){toast('Barcode '+codes[k]+' is already on '+clash.name);return false}}
+    for(var k=0;k<codes.length;k++){var clash=itemByCode(codes[k]);if(clash&&(!it||clash.id!==it.id)){toast('That barcode is already linked to '+clash.name);return false}}
     var pq=num(d.packQty)||1;if(pq<=0)pq=1;
     var sellOpts=[];
     [['opt1label','opt1qty','opt1price','opt1'],['opt2label','opt2qty','opt2price','opt2']].forEach(function(z){
       var label=(d[z[0]]||'').trim(),q=num(d[z[1]]),p=num(d[z[2]]);
-      if(label||q||p){
-        if(!label||q<=0||p<=0)return;
-        sellOpts.push({id:z[3],label:label,qty:q,price:p});
-      }
+      if(label||q||p){if(!label||q<=0||p<=0)return;sellOpts.push({id:z[3],label:label,qty:q,price:p})}
     });
-    if((d.opt1label||d.opt1qty||d.opt1price)&&!sellOpts.find(function(o){return o.id==='opt1'})){toast('Complete all fields for option 2');return false}
-    if((d.opt2label||d.opt2qty||d.opt2price)&&!sellOpts.find(function(o){return o.id==='opt2'})){toast('Complete all fields for option 3');return false}
-    var o={name:name,cat:(d.cat||'Other').trim(),unit:(d.unit||'pc').trim(),buyUnit:(d.buyUnit||d.unit||'pc').trim(),packQty:pq,cost:num(d.cost),price:num(d.price),reorder:num(d.reorder),codes:codes,code:codes[0]||'',photo:itemPhotoDraft,fractional:!!d.fractional,sellOpts:sellOpts,svc:!!d.svc,biz:d.biz||'store'};
+    if((d.opt1label||d.opt1qty||d.opt1price)&&!sellOpts.find(function(o){return o.id==='opt1'})){toast('Finish all three fields for the first extra selling option');return false}
+    if((d.opt2label||d.opt2qty||d.opt2price)&&!sellOpts.find(function(o){return o.id==='opt2'})){toast('Finish all three fields for the second extra selling option');return false}
+    var unit=(d.unit||'pc').trim(),buyUnit=(d.buyUnit||unit||'pc').trim();
+    var o={name:name,cat:(d.cat||'Groceries').trim(),unit:unit,buyUnit:buyUnit,packQty:pq,cost:num(d.cost),price:num(d.price),reorder:num(d.reorder),codes:codes,code:codes[0]||'',photo:itemPhotoDraft,fractional:!!d.fractional,sellOpts:sellOpts,svc:!!d.svc,biz:d.biz||'store'};
     if(it)Object.assign(it,o);else S.items.push(Object.assign({id:uid(),start:num(d.start)},o));
     save();toast(it?'Item updated':'Item added');
-  });
+  },{label:it?'Save changes':'Add item',cls:'btn-green'});
 }
 function restockForm(id){
   var it=item(id);if(!it)return;
